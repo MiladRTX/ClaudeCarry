@@ -53,22 +53,35 @@ the transcripts and memory that belong with them.
 | Included | Not included |
 |---|---|
 | Chat transcripts, including subagent logs | `.credentials.json` and `.claude.json` (login data, never read) |
-| Each project's memory (`memory\`) | Settings values whose names contain key, token, secret, password, auth, credential, cookie or bearer |
+| Each project's memory (`memory\`) | Secrets in `settings.json` (see below) |
 | `CLAUDE.md` and `skills\` (except `.trash`) | Caches, shell snapshots, file history, plugins |
 | `settings.json`, with secrets removed | |
 | Chat lists for every account on this PC | |
 
 The memory and settings options can be turned off with the **Include memory, skills & settings** switch.
 
+**How secrets are removed from `settings.json`:**
+- Any setting whose name looks secret, such as API keys, tokens, passwords, credentials, cookies, auth or connection strings, is dropped.
+- Token-shaped text is replaced with `[removed by ClaudeCarry]` wherever it appears, including permission rules and MCP server arguments. That covers Anthropic/OpenAI-style keys, GitHub, GitLab, Slack, AWS and Google keys, JWTs, `Bearer` tokens, passwords inside URLs, and values after flags like `--api-key`.
+- Harmless settings such as `includeCoAuthoredBy` and `MAX_THINKING_TOKENS` are kept.
+
+If you keep unusual secrets in settings, check the exported `claude/settings.json` before you share a zip.
+
 ## Import and copy rules
 
 - **Backups:** before anything changes, a backup zip is written to `Documents\ClaudeCarry-backups\`.
 - **Only adds:** files that don't exist are copied in. Identical files are skipped.
 - **Never overwrites:** a file that differs is left alone and listed. The one exception is `MEMORY.md`: missing lines are
-  appended and nothing is removed. A different `settings.json` is saved next to yours as `settings.imported.json`.
+  appended and nothing is removed. A different `settings.json` is saved next to yours as `settings.imported.json`
+  (or `settings.imported-2.json` and so on, if that already exists).
 - **Chats:** skipped if they're already in that account, their transcript is missing, or you deleted them there.
-  Archived chats stay archived.
-- **Claude must be closed:** ClaudeCarry won't write while the Claude app is running. Quit it and click **Check again**.
+  Newly added chats that were archived stay archived. Chats already in the account keep the state they have there.
+- **Claude must be closed:** ClaudeCarry won't write while the Claude desktop app is running. Quit it and click **Check again**.
+  A Claude Code CLI running in a terminal doesn't block it.
+- **Damaged files:** a broken chat entry or `settings.json` is skipped and reported, not fatal. A failed export leaves no half-written zip behind.
+
+**Current account:** ClaudeCarry marks the account the Claude app used most recently as **Current**. It works this out from
+files only the app writes, so importing or pasting into an old account doesn't change which one is Current.
 - Running the same import or paste twice is safe. The second run adds nothing.
 
 ## Moving to another PC

@@ -38,6 +38,11 @@ namespace ClaudeCarry
             BackColor = dark ? Color.FromArgb(9, 9, 11) : Color.White;
             web.DefaultBackgroundColor = BackColor;
             Controls.Add(web);
+            // Test mode: point the app at copies instead of the live folders.
+            string v;
+            if ((v = Environment.GetEnvironmentVariable("CLAUDECARRY_HOME")) != null) carry.Home = v;
+            if ((v = Environment.GetEnvironmentVariable("CLAUDECARRY_APPDATA")) != null) carry.App = v;
+            if ((v = Environment.GetEnvironmentVariable("CLAUDECARRY_BACKUPS")) != null) carry.BackupDir = v;
             carry.Log = line => Post(new Dictionary<string, object> { { "event", "log" }, { "text", line } });
             HandleCreated += delegate { SetDarkTitleBar(dark); };
             Load += async delegate { await Init(); };
@@ -177,6 +182,7 @@ namespace ClaudeCarry
                     };
                     if (dlg.ShowDialog(this) != DialogResult.OK) return new Dictionary<string, object> { { "cancelled", true } };
                     if (File.Exists(dlg.FileName)) throw new CarryError("exists", "That file already exists. Pick a new name.");
+                    if (busy) throw new CarryError("busy", "Another job is still running.");
                     string path = dlg.FileName;
                     busy = true;
                     try
@@ -205,7 +211,7 @@ namespace ClaudeCarry
                         catch (Exception) { throw new CarryError("not_export", "This zip isn't a ClaudeCarry export."); }
                         var chats = Carry.ListZipChats(zip);
                         object home; m.TryGetValue("claudeHome", out home);
-                        bool sameHome = string.Equals(Convert.ToString(home), Path.GetFullPath(carry.Home).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
+                        bool sameHome = string.Equals(Convert.ToString(home), Carry.Plain(Path.GetFullPath(carry.Home)).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
                         object partial; m.TryGetValue("partial", out partial);
                         return (object)new Dictionary<string, object>
                         {
@@ -230,7 +236,8 @@ namespace ClaudeCarry
                     bool dry = cmd == "preview";
                     if (!dry && carry.IsLiveApp && Carry.ClaudeRunning())
                         throw new CarryError("claude_running", "The Claude app is still open. Quit it completely (also from the tray icon), then try again.");
-                    busy = !dry;
+                    // Only a real run holds the busy flag, so a preview finishing can't release someone else's job.
+                    if (!dry) busy = true;
                     try
                     {
                         var r = await Task.Run(() => carry.Import(zip, account, dry, only));
@@ -241,7 +248,7 @@ namespace ClaudeCarry
                             { "settingsAside", r.SettingsAside }, { "backup", r.Backup }
                         };
                     }
-                    finally { busy = false; }
+                    finally { if (!dry) busy = false; }
                 }
 
                 case "copy":
@@ -253,13 +260,13 @@ namespace ClaudeCarry
                     bool dry = cmd == "copyPreview";
                     if (!dry && carry.IsLiveApp && Carry.ClaudeRunning())
                         throw new CarryError("claude_running", "The Claude app is still open. Quit it completely (also from the tray icon), then try again.");
-                    busy = !dry;
+                    if (!dry) busy = true;
                     try
                     {
                         var r = await Task.Run(() => carry.CopyChats(ResolveChats(keys), account, dry));
                         return new Dictionary<string, object> { { "chats", r.Chats }, { "chatsSkipped", r.ChatsSkipped }, { "backup", r.Backup } };
                     }
-                    finally { busy = false; }
+                    finally { if (!dry) busy = false; }
                 }
 
                 case "reveal":
@@ -277,17 +284,26 @@ namespace ClaudeCarry
         List<ChatInfo> ResolveChats(List<string> keys)
         {
             var want = new HashSet<string>(keys, StringComparer.OrdinalIgnoreCase);
+            var index = carry.TranscriptIndex();
             return carry.GetAccounts().Where(x => keys.Any(k => k.StartsWith(x.Id + "|")))
-                .SelectMany(x => carry.GetChats(x)).Where(c => want.Contains(c.AccountId + "|" + c.SessionId)).ToList();
+                .SelectMany(x => carry.GetChats(x, index)).Where(c => want.Contains(c.AccountId + "|" + c.SessionId)).ToList();
         }
 
         object[] Accounts()
         {
             var list = carry.GetAccounts();
-            return list.Select((x, i) => (object)new Dictionary<string, object>
+            var perAccount = list.GroupBy(x => x.Id.Split('\\')[0]).ToDictionary(g => g.Key, g => g.Count());
+            return list.Select((x, i) =>
             {
-                { "id", x.Id }, { "short", x.Id.Split('\\')[0].Substring(0, Math.Min(8, x.Id.Split('\\')[0].Length)) },
-                { "chats", x.Chats }, { "lastUsed", x.LastUsed.ToString("s") }, { "current", i == 0 }
+                var parts = x.Id.Split('\\');
+                string label = parts[0].Substring(0, Math.Min(8, parts[0].Length));
+                // Two organizations under one account would otherwise look identical.
+                if (perAccount[parts[0]] > 1 && parts.Length > 1) label += "/" + parts[1].Substring(0, Math.Min(4, parts[1].Length));
+                return (object)new Dictionary<string, object>
+                {
+                    { "id", x.Id }, { "short", label },
+                    { "chats", x.Chats }, { "lastUsed", x.LastUsed.ToString("s") }, { "current", i == 0 }
+                };
             }).ToArray();
         }
 

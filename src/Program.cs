@@ -15,7 +15,9 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
 
-[assembly: AssemblyVersion("1.0.0.0")]
+[assembly: AssemblyVersion("1.5.0.0")]
+[assembly: AssemblyFileVersion("1.5.0.0")]
+[assembly: AssemblyProduct("ClaudeCarry")]
 [assembly: AssemblyTitle("ClaudeCarry")]
 
 namespace ClaudeCarry
@@ -89,22 +91,28 @@ namespace ClaudeCarry
             string account = null;
             HashSet<string> only = null;
             bool dry = false, shared = true;
-            for (int i = 0; i < args.Length; i++)
-            {
-                switch (args[i])
-                {
-                    case "--home": carry.Home = args[++i]; break;
-                    case "--app": carry.App = args[++i]; break;
-                    case "--backup": carry.BackupDir = args[++i]; break;
-                    case "--account": account = args[++i]; break;
-                    case "--chats": only = new HashSet<string>(args[++i].Split(','), StringComparer.OrdinalIgnoreCase); break;
-                    case "--no-shared": shared = false; break;
-                    case "--dry-run": dry = true; break;
-                    default: pos.Add(args[i]); break;
-                }
-            }
             try
             {
+                for (int i = 0; i < args.Length; i++)
+                {
+                    Func<string> value = () =>
+                    {
+                        if (i + 1 >= args.Length) throw new ArgumentException(args[i] + " needs a value.");
+                        return args[++i];
+                    };
+                    switch (args[i])
+                    {
+                        case "--home": carry.Home = value(); break;
+                        case "--app": carry.App = value(); break;
+                        case "--backup": carry.BackupDir = value(); break;
+                        case "--account": account = value(); break;
+                        case "--chats": only = new HashSet<string>(value().Split(','), StringComparer.OrdinalIgnoreCase); break;
+                        case "--no-shared": shared = false; break;
+                        case "--dry-run": dry = true; break;
+                        default: pos.Add(args[i]); break;
+                    }
+                }
+                if (pos.Count == 0) pos.Add("help");
                 string cmd = pos[0].ToLowerInvariant();
                 if (cmd == "export")
                 {
@@ -129,6 +137,7 @@ namespace ClaudeCarry
                     }
                 else if (cmd == "import")
                 {
+                    if (pos.Count < 2) throw new ArgumentException("import needs the zip file: ClaudeCarry.exe import <file.zip>");
                     if (account == null)
                     {
                         var newest = carry.GetAccounts().FirstOrDefault();
