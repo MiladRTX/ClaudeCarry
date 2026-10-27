@@ -1,0 +1,9 @@
+# Line endings: keep Windows files as CRLF, everything else normalized
+* text=auto
+*.bat text eol=crlf
+
+# Binary files
+*.dll binary
+*.exe binary
+*.ico binary
+*.png binary

@@ -1,0 +1,692 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ClaudeCarry</title>
+<style>
+  :root {
+    --bg: #ffffff; --bg-subtle: #fafafa; --bg-muted: #f4f4f5; --border: #e4e4e7; --border-strong: #d4d4d8;
+    --fg: #09090b; --fg-muted: #71717a; --fg-faint: #a1a1aa;
+    --primary: #18181b; --primary-fg: #fafafa; --ring: #a1a1aa;
+    --accent: #2563eb; --ok: #16a34a; --warn: #d97706; --danger: #dc2626;
+    --ok-bg: #f0fdf4; --warn-bg: #fffbeb; --danger-bg: #fef2f2;
+    --shadow: 0 1px 2px rgba(0,0,0,.04), 0 1px 3px rgba(0,0,0,.06);
+    --shadow-lg: 0 10px 30px -10px rgba(0,0,0,.25), 0 4px 10px -6px rgba(0,0,0,.1);
+    --radius: 10px;
+  }
+  :root[data-theme="dark"] {
+    --bg: #09090b; --bg-subtle: #0c0c0e; --bg-muted: #18181b; --border: #27272a; --border-strong: #3f3f46;
+    --fg: #fafafa; --fg-muted: #a1a1aa; --fg-faint: #71717a;
+    --primary: #fafafa; --primary-fg: #18181b; --ring: #52525b;
+    --ok-bg: rgba(22,163,74,.12); --warn-bg: rgba(217,119,6,.12); --danger-bg: rgba(220,38,38,.12);
+    --shadow: 0 1px 2px rgba(0,0,0,.4);
+    --shadow-lg: 0 20px 40px -12px rgba(0,0,0,.7);
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font: 14px/1.45 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased; overflow: hidden; user-select: none;
+  }
+  input { user-select: text; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  .app { display: grid; grid-template-rows: auto 1fr auto; height: 100vh; }
+
+  .top { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--border); }
+  .logo { width: 28px; height: 28px; display: block; flex: none; }
+  .brand { font-weight: 600; letter-spacing: -.01em; }
+  .brand small { color: var(--fg-muted); font-weight: 400; margin-left: 6px; }
+  .spacer { flex: 1; }
+  .icon-btn { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); display: grid; place-items: center; color: var(--fg-muted); transition: background .15s, color .15s; }
+  .icon-btn:hover { background: var(--bg-muted); color: var(--fg); }
+
+  .btn { height: 34px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); display: inline-flex; align-items: center; gap: 8px; font-weight: 500; transition: background .15s, border-color .15s, opacity .15s, transform .05s; white-space: nowrap; }
+  .btn:hover { background: var(--bg-muted); }
+  .btn:active { transform: translateY(1px); }
+  .btn.primary { background: var(--primary); color: var(--primary-fg); border-color: var(--primary); }
+  .btn.primary:hover { opacity: .9; }
+  .btn.ghost { border-color: transparent; background: transparent; color: var(--fg-muted); }
+  .btn.ghost:hover { background: var(--bg-muted); color: var(--fg); }
+  .btn:disabled { opacity: .45; pointer-events: none; }
+  .btn.sm { height: 28px; padding: 0 10px; font-size: 13px; }
+  .link { border: 0; background: none; padding: 0; color: var(--fg); text-decoration: underline; text-underline-offset: 2px; font-size: inherit; }
+
+  .main { display: grid; grid-template-columns: clamp(220px, 24vw, 280px) minmax(0, 1fr); min-height: 0; }
+  .side { border-right: 1px solid var(--border); background: var(--bg-subtle); padding: 16px 12px; overflow: auto; }
+  .label { font-size: 12px; font-weight: 500; color: var(--fg-muted); padding: 0 8px 8px; }
+  .acct { width: 100%; text-align: left; border: 1px solid transparent; background: transparent; border-radius: 9px; padding: 10px; display: flex; gap: 10px; align-items: center; transition: background .15s, border-color .15s; margin-bottom: 2px; }
+  .acct:hover { background: var(--bg-muted); }
+  .acct.active { background: var(--bg); border-color: var(--border); box-shadow: var(--shadow); }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; flex: none; display: grid; place-items: center; font-size: 12px; font-weight: 600; color: #fff; }
+  .acct-body { min-width: 0; flex: 1; }
+  .acct-name { font-weight: 500; font-family: ui-monospace, Consolas, monospace; font-size: 13px; }
+  .acct-meta { font-size: 12px; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .acct-sel { font-size: 12px; font-weight: 600; color: var(--accent); margin-top: 1px; }
+  .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 500; padding: 1px 8px; border-radius: 99px; border: 1px solid var(--border); color: var(--fg-muted); background: var(--bg); white-space: nowrap; }
+  .badge.live { color: var(--ok); border-color: transparent; background: var(--ok-bg); }
+  .badge.live::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
+  .count-pill { font-size: 12px; color: var(--fg-muted); background: var(--bg-muted); border-radius: 99px; padding: 0 8px; }
+  .side-foot { margin-top: 16px; padding: 12px; border: 1px dashed var(--border-strong); border-radius: 10px; font-size: 12px; color: var(--fg-muted); }
+
+  .content { display: grid; grid-template-rows: auto auto 1fr; min-height: 0; }
+  .head { padding: 20px 24px 12px; display: flex; align-items: flex-end; gap: 16px; }
+  .head h1 { font-size: 20px; margin: 0; letter-spacing: -.02em; font-weight: 600; }
+  .head p { margin: 2px 0 0; color: var(--fg-muted); }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 0 24px 12px; }
+  .search { position: relative; flex: 1 1 220px; max-width: 360px; min-width: 180px; }
+  .search input { width: 100%; height: 34px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--fg); padding: 0 12px 0 34px; font: inherit; outline: none; transition: border-color .15s, box-shadow .15s; }
+  .search input:focus { border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 25%, transparent); }
+  .search svg { position: absolute; left: 11px; top: 10px; color: var(--fg-faint); }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; padding: 2px; background: var(--bg-muted); }
+  .seg button { border: 0; background: transparent; height: 28px; padding: 0 10px; border-radius: 6px; font-size: 13px; color: var(--fg-muted); }
+  .seg button.on { background: var(--bg); color: var(--fg); box-shadow: var(--shadow); }
+
+  .list { overflow: auto; padding: 0 24px 24px; }
+  .table { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .row { display: grid; grid-template-columns: 40px minmax(0, 1fr) 160px 130px 80px; align-items: center; min-height: 52px; border-bottom: 1px solid var(--border); transition: background .12s; cursor: pointer; }
+  .row:last-child { border-bottom: 0; }
+  .row:hover { background: var(--bg-subtle); }
+  .row.sel { background: color-mix(in srgb, var(--accent) 6%, var(--bg)); }
+  .row.dis { cursor: default; opacity: .55; }
+  .row.hdr { min-height: 38px; background: var(--bg-subtle); font-size: 12px; color: var(--fg-muted); font-weight: 500; cursor: default; }
+  .row > div { padding: 0 12px; min-width: 0; }
+  .title { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sub { font-size: 12px; color: var(--fg-muted); display: flex; gap: 6px; align-items: center; margin-top: 2px; }
+  .muted { color: var(--fg-muted); font-size: 13px; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .folder { display: inline-flex; align-items: center; gap: 6px; color: var(--fg-muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .folder svg, .sub svg { flex: none; }
+  .mono { font-family: ui-monospace, Consolas, monospace; }
+
+  .cb { width: 16px; height: 16px; border-radius: 4px; border: 1px solid var(--border-strong); display: grid; place-items: center; background: var(--bg); transition: background .12s, border-color .12s; margin: auto; cursor: pointer; }
+  .cb svg { opacity: 0; transform: scale(.6); transition: opacity .12s, transform .12s; }
+  .on > .cb, .cb.on { background: var(--primary); border-color: var(--primary); color: var(--primary-fg); }
+  .on > .cb svg, .cb.on svg { opacity: 1; transform: none; }
+  .cb.mixed { background: var(--primary); border-color: var(--primary); }
+  .cb.mixed::after { content: ""; width: 8px; height: 2px; background: var(--primary-fg); border-radius: 1px; }
+
+  .bar { border-top: 1px solid var(--border); padding: 12px 20px; display: flex; align-items: center; gap: 12px; background: var(--bg); }
+  .switch { display: inline-flex; align-items: center; gap: 8px; color: var(--fg-muted); font-size: 13px; cursor: pointer; }
+  .switch i { width: 30px; height: 18px; border-radius: 99px; background: var(--border-strong); position: relative; transition: background .15s; }
+  .switch i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+  .switch.on i { background: var(--primary); }
+  .switch.on i::after { transform: translateX(12px); background: var(--primary-fg); }
+  .bar > * { flex-shrink: 0; }
+  .sel-info { flex: 1 1 auto; min-width: 0; font-size: 13px; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .folder .ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .sel-info b { color: var(--fg); font-weight: 600; }
+
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.4); backdrop-filter: blur(2px); display: grid; place-items: center; opacity: 0; pointer-events: none; transition: opacity .18s; z-index: 10; }
+  .overlay.open { opacity: 1; pointer-events: auto; }
+  .dialog { width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 48px); background: var(--bg); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-lg); display: grid; grid-template-rows: auto 1fr auto; transform: translateY(8px) scale(.98); transition: transform .18s; overflow: hidden; }
+  .overlay.open .dialog { transform: none; }
+  .d-head { padding: 20px 24px 0; }
+  .d-head h2 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -.01em; }
+  .d-head p { margin: 4px 0 0; color: var(--fg-muted); font-size: 13px; }
+  .steps { display: flex; gap: 6px; margin-top: 16px; }
+  .step { flex: 1; display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--fg-faint); }
+  .step::before { content: ""; height: 3px; border-radius: 3px; background: var(--border); transition: background .2s; }
+  .step.done, .step.cur { color: var(--fg); }
+  .step.done::before, .step.cur::before { background: var(--primary); }
+  .d-body { padding: 16px 24px; overflow: auto; min-height: 0; }
+  .d-foot { padding: 14px 24px; border-top: 1px solid var(--border); display: flex; gap: 8px; align-items: center; background: var(--bg-subtle); }
+
+  .file-drop { display: block; width: 100%; border: 1.5px dashed var(--border-strong); background: transparent; border-radius: 12px; padding: 28px; text-align: center; color: var(--fg-muted); transition: border-color .15s, background .15s; }
+  .file-drop:hover { border-color: var(--fg-faint); background: var(--bg-subtle); }
+  .file-card { display: flex; gap: 12px; align-items: center; border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-top: 12px; }
+  .file-ico { width: 36px; height: 36px; border-radius: 8px; background: var(--bg-muted); display: grid; place-items: center; color: var(--fg-muted); flex: none; }
+
+  .mini { border: 1px solid var(--border); border-radius: 10px; max-height: 300px; overflow: auto; }
+  .mini .row { grid-template-columns: 40px minmax(0,1fr) 120px 80px; min-height: 48px; }
+  .num { white-space: nowrap; }
+  .acct-pick { display: grid; gap: 8px; }
+  .acct-opt { display: flex; align-items: center; gap: 12px; border: 1px solid var(--border); border-radius: 10px; padding: 12px; text-align: left; background: var(--bg); transition: border-color .15s, box-shadow .15s; width: 100%; }
+  .acct-opt:hover { border-color: var(--border-strong); }
+  .acct-opt.on { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+  .radio { width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--border-strong); display: grid; place-items: center; flex: none; }
+  .acct-opt.on .radio::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--primary); }
+
+  .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .stat { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .stat b { display: block; font-size: 22px; font-weight: 600; letter-spacing: -.02em; }
+  .stat span { font-size: 12px; color: var(--fg-muted); }
+  .note { display: flex; gap: 10px; padding: 10px 12px; border-radius: 10px; font-size: 13px; margin-top: 12px; align-items: flex-start; }
+  .note svg { flex: none; margin-top: 2px; }
+  .note.ok { background: var(--ok-bg); color: var(--ok); }
+  .note.warn { background: var(--warn-bg); color: var(--warn); }
+  .note.err { background: var(--danger-bg); color: var(--danger); }
+  .note p { margin: 0; color: var(--fg); flex: 1; }
+  .note b { white-space: nowrap; }
+  details { margin-top: 12px; font-size: 13px; color: var(--fg-muted); }
+  details summary { cursor: pointer; }
+  details ul { margin: 6px 0 0; padding-left: 18px; max-height: 120px; overflow: auto; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+
+  .progress { height: 6px; border-radius: 99px; background: var(--bg-muted); overflow: hidden; margin-top: 14px; position: relative; }
+  .progress i { position: absolute; top: 0; bottom: 0; width: 35%; background: var(--primary); border-radius: 99px; animation: slide 1.1s ease-in-out infinite; }
+  @keyframes slide { from { left: -35%; } to { left: 100%; } }
+  .done-ico { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--ok-bg); color: var(--ok); margin: 6px auto 12px; }
+  .log-line { margin-top: 8px; font: 12px ui-monospace, Consolas, monospace; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--border-strong); border-top-color: var(--fg); animation: rot .7s linear infinite; flex: none; }
+  @keyframes rot { to { transform: rotate(360deg); } }
+
+  .toast { position: fixed; right: 20px; bottom: 76px; background: var(--bg); border: 1px solid var(--border); box-shadow: var(--shadow-lg); border-radius: 12px; padding: 12px 14px; display: flex; gap: 12px; align-items: center; width: 380px; transform: translateY(12px); opacity: 0; transition: .2s; pointer-events: none; z-index: 20; }
+  .toast.show { transform: none; opacity: 1; pointer-events: auto; }
+  .toast .t-body { min-width: 0; flex: 1; }
+  .toast .t-title { font-weight: 600; font-size: 13px; }
+  .toast .t-sub { font-size: 12px; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .t-ico { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; flex: none; }
+  .t-ico.ok { background: var(--ok-bg); color: var(--ok); }
+  .t-ico.err { background: var(--danger-bg); color: var(--danger); }
+
+  .empty { padding: 60px 20px; text-align: center; color: var(--fg-muted); }
+  .skeleton { height: 52px; border-bottom: 1px solid var(--border); background: linear-gradient(90deg, transparent, var(--bg-muted), transparent); background-size: 200% 100%; animation: sk 1.2s infinite; }
+  @keyframes sk { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; border: 3px solid var(--bg); }
+  .clip { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 4px 0 12px; border-radius: 8px; border: 1px dashed var(--border-strong); font-size: 13px; color: var(--fg-muted); animation: pop .18s ease-out; }
+  .clip b { color: var(--fg); font-weight: 600; }
+  .clip .x { width: 24px; height: 24px; border: 0; background: transparent; border-radius: 6px; color: var(--fg-faint); display: grid; place-items: center; }
+  .clip .x:hover { background: var(--bg-muted); color: var(--fg); }
+  @keyframes pop { from { transform: scale(.96); opacity: 0; } }
+  @media (max-width: 960px) {
+    .row { grid-template-columns: 40px minmax(0, 1fr) 120px 110px; }
+    .row > .c-size { display: none; }
+    .head, .toolbar, .list, .bar { padding-left: 16px; padding-right: 16px; }
+    .toolbar .spacer { display: none; }
+    .switch .lbl { display: none; }
+    .head h1 { font-size: 18px; }
+  }
+  .mockup-tag { position: fixed; left: 50%; top: 10px; transform: translateX(-50%); font-size: 11px; color: var(--fg-faint); }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <img class="logo" alt="" src="data:image/png;base64,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">
+    <div class="brand">ClaudeCarry<small>Move your Claude Code chats between accounts</small></div>
+    <div class="spacer"></div>
+    <button class="btn ghost sm" id="refresh"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>Refresh</button>
+    <button class="icon-btn" id="theme" title="Light / dark"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></button>
+  </header>
+
+  <div class="main">
+    <aside class="side">
+      <div class="label">Accounts on this PC</div>
+      <div id="accounts"></div>
+      <div class="side-foot"><b>Current</b> is the account the Claude app used most recently, normally the one you're logged into.</div>
+    </aside>
+
+    <section class="content">
+      <div class="head">
+        <div>
+          <h1 id="acctTitle">Chats</h1>
+          <p id="acctSub">&nbsp;</p>
+        </div>
+      </div>
+      <div class="toolbar">
+        <div class="search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="q" placeholder="Search chats or folders" spellcheck="false">
+        </div>
+        <div class="seg" id="filter">
+          <button class="on" data-f="all">All</button>
+          <button data-f="active">Active</button>
+          <button data-f="archived">Archived</button>
+        </div>
+        <div class="spacer"></div>
+        <div id="pasteArea"></div>
+        <button class="btn ghost sm" id="selAll">Select all</button>
+        <button class="btn ghost sm" id="selNone">Clear</button>
+      </div>
+      <div class="list"><div class="table" id="chats"></div></div>
+    </section>
+  </div>
+
+  <footer class="bar">
+    <div class="sel-info" id="selInfo"></div>
+    <div class="spacer"></div>
+    <label class="switch on" id="shared" title="Include memory, skills and settings: adds the memory of the chosen chats' projects, plus CLAUDE.md, skills and settings (secrets removed)"><i></i><span class="lbl">Include memory, skills &amp; settings</span></label>
+    <button class="btn" id="copyBtn" title="Copy the selected chats, then paste them into another account (Ctrl+C)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span>Copy</span></button>
+    <button class="btn" id="importBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>Import</button>
+    <button class="btn" id="exportAll">Export everything</button>
+    <button class="btn primary" id="exportSel"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21V9m0 0-4 4m4-4 4 4M4 7V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2"/></svg><span>Export</span></button>
+  </footer>
+</div>
+
+<div class="overlay" id="imp">
+  <div class="dialog">
+    <div class="d-head">
+      <h2>Import chats</h2>
+      <p>Restore chats from an export into one of your accounts.</p>
+      <div class="steps" id="steps">
+        <div class="step">1. File</div><div class="step">2. Chats</div><div class="step">3. Account</div><div class="step">4. Review</div>
+      </div>
+    </div>
+    <div class="d-body" id="impBody"></div>
+    <div class="d-foot">
+      <span class="muted" id="impHint"></span>
+      <div class="spacer"></div>
+      <button class="btn ghost" id="impBack">Back</button>
+      <button class="btn primary" id="impNext">Continue</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="pasteDlg">
+  <div class="dialog" style="width:min(560px, calc(100vw - 32px))">
+    <div class="d-head"><h2 id="pTitle">Paste chats</h2><p id="pSub">No zip needed: the chats are added straight to this account.</p></div>
+    <div class="d-body" id="pBody"></div>
+    <div class="d-foot"><span class="muted" id="pHint"></span><div class="spacer"></div>
+      <button class="btn ghost" id="pCancel">Cancel</button><button class="btn primary" id="pGo">Paste</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><div class="t-ico" id="tIco"></div><div class="t-body"><div class="t-title" id="tTitle"></div><div class="t-sub" id="tSub"></div></div><span id="tAct"></span></div>
+
+<script>
+// ---------- bridge to the C# host (falls back to sample data when opened in a normal browser) ----------
+const host = window.chrome && window.chrome.webview;
+const pending = new Map();
+let nextId = 1, lastLog = "";
+const logListeners = new Set();
+if (host) host.addEventListener("message", e => {
+  const m = e.data;
+  if (m.event === "log") { lastLog = m.text; logListeners.forEach(f => f(m.text)); return; }
+  const p = pending.get(m.id); if (!p) return;
+  pending.delete(m.id);
+  m.ok ? p.resolve(m.result) : p.reject(Object.assign(new Error(m.error), { code: m.code }));
+});
+function api(cmd, args) {
+  if (!host) return mock(cmd, args || {});
+  return new Promise((resolve, reject) => { const id = nextId++; pending.set(id, { resolve, reject }); host.postMessage({ id, cmd, args: args || {} }); });
+}
+
+// ---------- icons & helpers ----------
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const ico = {
+  check: '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></svg>',
+  folder: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>',
+  ok: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m5 12 5 5 9-10"/></svg>',
+  err: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+  shield: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg>',
+  warn: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>',
+  file: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></svg>'
+};
+const palette = ["#2563eb", "#9333ea", "#0891b2", "#ea580c", "#db2777", "#16a34a", "#ca8a04", "#4f46e5"];
+const color = id => palette[[...id].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % palette.length];
+const size = b => b >= 1073741824 ? (b / 1073741824).toFixed(1) + " GB" : b >= 1048576 ? (b / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(b / 1024)) + " KB";
+const fmt = iso => { if (!iso) return ""; const d = new Date(iso); return d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) + ", " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }); };
+const ago = iso => { const d = new Date(iso), days = Math.floor((Date.now() - d) / 864e5); return days < 1 ? "Today" : days < 2 ? "Yesterday" : d.toLocaleDateString(undefined, { month: "short", day: "numeric" }); };
+const plural = (n, w) => n + " " + w + (n === 1 ? "" : "s");
+
+// ---------- state ----------
+let accounts = [], cur = null, chats = [], filter = "all", q = "", loading = false, working = false;
+const selected = new Map();           // key -> chat
+const chatCache = new Map();          // account id -> chats
+
+async function loadAccounts(keepId) {
+  accounts = await api("accounts");
+  cur = accounts.find(a => a.id === keepId) || accounts[0] || null;
+  renderAccounts();
+  await loadChats();
+}
+async function loadChats(force) {
+  if (!cur) { chats = []; renderChats(); return; }
+  if (!force && chatCache.has(cur.id)) { chats = chatCache.get(cur.id); renderChats(); return; }
+  loading = true; renderChats();
+  const id = cur.id, list = await api("chats", { account: id });
+  chatCache.set(id, list);
+  if (cur && cur.id === id) { chats = list; loading = false; renderChats(); }
+}
+
+function renderAccounts() {
+  const perAcct = {};
+  selected.forEach(c => perAcct[c.account] = (perAcct[c.account] || 0) + 1);
+  $("#accounts").innerHTML = accounts.length ? accounts.map(a => `
+    <button class="acct ${a === cur ? "active" : ""}" data-id="${esc(a.id)}">
+      <div class="avatar" style="background:${color(a.id)}">${esc(a.short.slice(0, 2).toUpperCase())}</div>
+      <div class="acct-body"><div class="acct-name">${esc(a.short)}</div><div class="acct-meta">${plural(a.chats, "chat")} · ${ago(a.lastUsed)}</div>${perAcct[a.id] ? `<div class="acct-sel">${perAcct[a.id]} selected</div>` : ""}</div>
+      ${a.current ? '<span class="badge live">Current</span>' : ""}
+    </button>`).join("") : `<div class="muted" style="padding:8px">No accounts yet. Log into Claude and open the Code tab once.</div>`;
+  document.querySelectorAll(".acct").forEach(b => b.onclick = () => { cur = accounts.find(a => a.id === b.dataset.id); renderAccounts(); loadChats(); });
+  renderPaste();
+}
+
+function visible() {
+  return chats.filter(c => (filter === "all" || (filter === "archived") === c.archived) &&
+    (!q || (c.title + " " + c.folder).toLowerCase().includes(q)));
+}
+
+function renderChats() {
+  $("#acctTitle").textContent = cur ? "Account " + cur.short : "No accounts";
+  $("#acctSub").textContent = !cur ? "\u00a0" : loading ? "Loading…" : chats.length ? `${plural(chats.length, "chat")} · ${size(chats.reduce((s, c) => s + c.bytes, 0))} on disk` : "No chats in this account yet";
+  if (loading) { $("#chats").innerHTML = '<div class="row hdr"><div></div><div>Chat</div></div>' + '<div class="skeleton"></div>'.repeat(6); return; }
+  const rows = visible(), pickable = rows.filter(c => c.hasTranscript);
+  const nSel = pickable.filter(c => selected.has(c.key)).length;
+  const hdr = nSel === 0 ? "" : nSel === pickable.length ? "on" : "mixed";
+  $("#chats").innerHTML = !chats.length
+    ? `<div class="empty"><b style="color:var(--fg)">No chats here</b><br>This account hasn't been used in the Code tab yet. Import an export into it.</div>`
+    : `<div class="row hdr"><div><span class="cb ${hdr}" id="hdrCb">${hdr === "on" ? ico.check : ""}</span></div><div>Chat</div><div>Project folder</div><div>Last active</div><div class="num c-size">Size</div></div>` +
+      (rows.length ? rows.map(c => `
+      <div class="row ${selected.has(c.key) ? "sel" : ""} ${c.hasTranscript ? "" : "dis"}" data-key="${esc(c.key)}" title="${esc(c.cwd)}">
+        <div class="${selected.has(c.key) ? "on" : ""}">${c.hasTranscript ? `<span class="cb">${ico.check}</span>` : ""}</div>
+        <div><div class="title">${esc(c.title)}</div>${c.archived || !c.hasTranscript ? `<div class="sub">${c.archived ? '<span class="badge">Archived</span>' : ""}${c.hasTranscript ? "" : "Transcript not on this PC"}</div>` : ""}</div>
+        <div><span class="folder">${ico.folder}<span class="ell">${esc(c.folder || "-")}</span></span></div>
+        <div class="muted">${fmt(c.last)}</div>
+        <div class="num muted c-size">${c.hasTranscript ? size(c.bytes) : ""}</div>
+      </div>`).join("") : `<div class="empty">No chats match “${esc(q)}”.</div>`);
+  document.querySelectorAll("#chats .row[data-key]").forEach(r => r.onclick = () => {
+    const c = chats.find(x => x.key === r.dataset.key);
+    if (!c.hasTranscript) return;
+    selected.has(c.key) ? selected.delete(c.key) : selected.set(c.key, c);
+    renderChats(); renderAccounts(); renderBar();
+  });
+  const h = $("#hdrCb"); if (h) h.onclick = () => setAll(hdr !== "on");
+}
+
+function renderBar() {
+  const n = selected.size, accts = new Set([...selected.values()].map(c => c.account)).size;
+  const bytes = [...selected.values()].reduce((s, c) => s + c.bytes, 0);
+  $("#selInfo").innerHTML = n ? `<b>${n}</b> ${n === 1 ? "chat" : "chats"} selected${accts > 1 ? ` from ${accts} accounts` : ""} · ${size(bytes)}` : "Select chats to export, or export everything.";
+  $("#exportSel span").textContent = n ? `Export ${plural(n, "chat")}` : "Export";
+  $("#exportSel").disabled = $("#copyBtn").disabled = !n || working;
+  $("#exportAll").disabled = $("#importBtn").disabled = working;
+  renderPaste();
+}
+
+function setAll(on) { visible().filter(c => c.hasTranscript).forEach(c => on ? selected.set(c.key, c) : selected.delete(c.key)); renderChats(); renderAccounts(); renderBar(); }
+
+$("#q").oninput = e => { q = e.target.value.toLowerCase(); renderChats(); };
+document.querySelectorAll("#filter button").forEach(b => b.onclick = () => {
+  filter = b.dataset.f; document.querySelectorAll("#filter button").forEach(x => x.classList.toggle("on", x === b)); renderChats();
+});
+$("#selAll").onclick = () => setAll(true);
+$("#selNone").onclick = () => { selected.clear(); renderChats(); renderAccounts(); renderBar(); };
+$("#shared").onclick = e => { e.preventDefault(); $("#shared").classList.toggle("on"); };
+function setTheme(t) { document.documentElement.dataset.theme = t; try { localStorage.setItem("theme", t); } catch (e) {} api("theme", { theme: t }); }
+$("#theme").onclick = () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+$("#refresh").onclick = async () => { chatCache.clear(); await loadAccounts(cur && cur.id); toast("ok", "Refreshed", `${plural(accounts.length, "account")}, ${plural(accounts.reduce((s, a) => s + a.chats, 0), "chat")}`); };
+
+// ---------- toast ----------
+function toast(kind, title, sub, action) {
+  $("#tIco").className = kind === "busy" ? "spin" : "t-ico " + kind;
+  $("#tIco").innerHTML = kind === "ok" ? ico.ok : kind === "err" ? ico.err : "";
+  $("#tTitle").textContent = title; $("#tSub").textContent = sub || "";
+  $("#tAct").innerHTML = ""; if (action) { const b = document.createElement("button"); b.className = "btn sm"; b.textContent = action.label; b.onclick = action.run; $("#tAct").append(b); }
+  $("#toast").classList.add("show"); clearTimeout(toast.t);
+  if (kind !== "busy") toast.t = setTimeout(() => $("#toast").classList.remove("show"), action ? 8000 : 3500);
+}
+
+// ---------- export ----------
+async function doExport(keys) {
+  working = true; renderBar();
+  const onLog = t => $("#tSub").textContent = t;
+  try {
+    toast("busy", "Exporting…", "Choose where to save the zip");
+    logListeners.add(onLog);
+    const r = await api("export", { chats: keys, shared: $("#shared").classList.contains("on") });
+    if (r.cancelled) { $("#toast").classList.remove("show"); return; }
+    toast("ok", "Export saved", `${r.name} · ${size(r.bytes)}`, { label: "Show in folder", run: () => api("reveal", { path: r.path }) });
+  } catch (e) { toast("err", "Export failed", e.message); }
+  finally { logListeners.delete(onLog); working = false; renderBar(); }
+}
+$("#exportSel").onclick = () => doExport([...selected.keys()]);
+$("#exportAll").onclick = () => doExport(null);
+
+// ---------- copy & paste between accounts (no zip) ----------
+let clip = [];                        // copied chats
+let paste = null;                     // { target, preview, result, error, busy }
+
+function copySelection() {
+  if (!selected.size) return;
+  clip = [...selected.values()];
+  toast("ok", `${plural(clip.length, "chat")} copied`, "Now open another account and click Paste here (Ctrl+V).");
+  renderPaste();
+}
+$("#copyBtn").onclick = copySelection;
+
+function pastable() { return cur ? clip.filter(c => c.account !== cur.id) : []; }
+
+function renderPaste() {
+  const el = $("#pasteArea");
+  if (!clip.length) { el.innerHTML = ""; return; }
+  const n = pastable().length;
+  el.innerHTML = `<span class="clip"><span><b>${clip.length}</b> copied</span>
+    <button class="btn primary sm" id="pasteBtn" ${n ? "" : "disabled"} title="${n ? "Add the copied chats to this account (Ctrl+V)" : "These chats are from this account. Open another account to paste."}">Paste ${n ? "here" : ""}</button>
+    <button class="x" id="clipX" title="Forget copied chats"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg></button></span>`;
+  $("#pasteBtn").onclick = openPaste;
+  $("#clipX").onclick = () => { clip = []; renderPaste(); };
+}
+
+async function openPaste() {
+  const items = pastable();
+  if (!items.length || !cur) return;
+  paste = { target: cur, items, preview: null, result: null, error: null, busy: false };
+  $("#toast").classList.remove("show");
+  $("#pasteDlg").classList.add("open"); renderPasteDlg();
+  try {
+    const [p, open] = await Promise.all([api("copyPreview", { chats: items.map(c => c.key), account: cur.id }), api("claudeRunning")]);
+    paste.preview = p; paste.claudeOpen = open;
+  } catch (e) { paste.error = e.message; }
+  renderPasteDlg();
+}
+function closePaste() { if (paste && paste.busy) return; $("#pasteDlg").classList.remove("open"); }
+$("#pCancel").onclick = closePaste;
+$("#pasteDlg").onclick = e => { if (e.target.id === "pasteDlg") closePaste(); };
+$("#pGo").onclick = async () => {
+  if (paste.result) { closePaste(); return; }
+  paste.busy = true; renderPasteDlg();
+  try {
+    paste.result = await api("copy", { chats: paste.items.map(c => c.key), account: paste.target.id });
+    chatCache.delete(paste.target.id); clip = [];
+    await loadAccounts(paste.target.id);
+  } catch (e) {
+    if (e.code === "claude_running") paste.claudeOpen = true; else paste.error = e.message;
+  }
+  paste.busy = false; renderPasteDlg();
+};
+
+function renderPasteDlg() {
+  const p = paste, go = $("#pGo"), b = $("#pBody");
+  $("#pTitle").textContent = p.result ? "Chats pasted" : `Paste ${plural(p.items.length, "chat")} into ${p.target.short}`;
+  $("#pCancel").style.display = p.result ? "none" : "";
+  $("#pHint").textContent = "";
+  const list = `<div class="mini" style="max-height:180px">${p.items.map(c => `<div class="row" style="cursor:default"><div><span class="avatar" style="width:18px;height:18px;font-size:9px;margin:auto;background:${color(c.account)}">${esc(c.account.slice(0, 2).toUpperCase())}</span></div>
+      <div><div class="title">${esc(c.title)}</div><div class="sub">${ico.folder}${esc(c.folder || "-")}</div></div><div class="muted">${fmt(c.last)}</div><div class="num muted">${size(c.bytes)}</div></div>`).join("")}</div>`;
+  const err = p.error ? `<div class="note err">${ico.err}<p>${esc(p.error)}</p></div>` : "";
+  if (p.result) {
+    b.innerHTML = `<div style="text-align:center;padding:8px 0"><div class="done-ico">${ico.ok.replace(/16/g, "22")}</div>
+      <div style="font-weight:600;font-size:16px">${p.result.chats ? plural(p.result.chats, "chat") + " added to " + esc(p.target.short) : "Nothing new to add"}</div>
+      <p class="muted" style="margin:4px 0 0">Start the Claude app. They're in the Code tab sidebar.</p>
+      ${p.result.backup ? `<p class="muted" style="margin:14px 0 0;font-size:12px">Backup saved: <button class="link" id="pBackup">${esc(p.result.backup.split("\\").pop())}</button></p>` : ""}</div>`;
+    if ($("#pBackup")) $("#pBackup").onclick = () => api("reveal", { path: p.result.backup });
+    go.disabled = false; go.textContent = "Done"; return;
+  }
+  if (p.busy) {
+    b.innerHTML = list + `<div class="progress"><i></i></div>`;
+    go.disabled = true; go.textContent = "Pasting…"; return;
+  }
+  if (!p.preview) {
+    b.innerHTML = list + (err || `<div style="display:flex;gap:10px;align-items:center;padding:14px 0 0" class="muted"><span class="spin"></span>Checking…</div>`);
+    go.disabled = true; go.textContent = "Paste"; return;
+  }
+  const v = p.preview;
+  b.innerHTML = list +
+    `<div class="note ok">${ico.shield}<p>${v.chats ? `${plural(v.chats, "chat")} will be added` : "Nothing new to add"}${v.chatsSkipped ? `, ${v.chatsSkipped} already there or skipped` : ""}. The account's chat list is backed up first; nothing is overwritten or deleted.</p></div>` +
+    (p.claudeOpen ? `<div class="note warn">${ico.warn}<p>The Claude app is still open. Quit it completely (also from the tray icon), then click <b>Check again</b>.</p><button class="btn sm" id="pRecheck">Check again</button></div>` : "") + err;
+  if ($("#pRecheck")) $("#pRecheck").onclick = async () => { p.claudeOpen = await api("claudeRunning"); renderPasteDlg(); };
+  go.disabled = !v.chats || p.claudeOpen;
+  go.textContent = v.chats ? `Paste ${plural(v.chats, "chat")}` : "Paste";
+}
+
+// Ctrl+C / Ctrl+V / Ctrl+A on the chat list
+document.addEventListener("keydown", e => {
+  if (!e.ctrlKey || e.target.tagName === "INPUT" || document.querySelector(".overlay.open")) return;
+  const k = e.key.toLowerCase();
+  if (k === "c" && selected.size) { e.preventDefault(); copySelection(); }
+  else if (k === "v" && pastable().length) { e.preventDefault(); openPaste(); }
+  else if (k === "a") { e.preventDefault(); setAll(true); }
+});
+
+// ---------- import wizard ----------
+let step = 0, zip = null, impSel = new Set(), impAcct = null, preview = null, result = null, impError = null, running = null;
+function openImport() { step = 0; zip = null; preview = result = impError = null; impAcct = accounts[0] && accounts[0].id; $("#imp").classList.add("open"); renderImport(); }
+function closeImport() { if (step === 4) return; $("#imp").classList.remove("open"); }
+$("#importBtn").onclick = openImport;
+$("#imp").onclick = e => { if (e.target.id === "imp") closeImport(); };
+document.addEventListener("keydown", e => { if (e.key === "Escape") { closeImport(); closePaste(); } });
+$("#impBack").onclick = () => { if (step === 0) closeImport(); else { step--; renderImport(); } };
+$("#impNext").onclick = async () => {
+  if (step === 3) return runImport();
+  if (step === 5) { closeImport(); return; }
+  step++; renderImport();
+  if (step === 3) loadPreview();
+};
+
+async function pickZip() {
+  try {
+    const r = await api("pickZip");
+    if (r.cancelled) return;
+    zip = r; impSel = new Set(r.chats.map(c => c.session)); impError = null;
+  } catch (e) { zip = null; impError = e.message; }
+  renderImport();
+}
+
+async function loadPreview() {
+  preview = null; impError = null; renderImport();
+  try {
+    const all = impSel.size === zip.chats.length;
+    const [p, open] = await Promise.all([api("preview", { zip: zip.path, account: impAcct, sessions: all ? null : [...impSel] }), api("claudeRunning")]);
+    preview = p; preview.claudeOpen = open;
+  } catch (e) { impError = e.message; }
+  if (step === 3) renderImport();
+}
+
+async function runImport() {
+  step = 4; renderImport();
+  const onLog = t => { const el = $("#impLog"); if (el) el.textContent = t; };
+  logListeners.add(onLog);
+  try {
+    const all = impSel.size === zip.chats.length;
+    result = await api("import", { zip: zip.path, account: impAcct, sessions: all ? null : [...impSel] });
+    step = 5; chatCache.clear(); loadAccounts(cur && cur.id);
+  } catch (e) {
+    step = 3;
+    if (e.code === "claude_running") preview.claudeOpen = true; else impError = e.message;
+  } finally { logListeners.delete(onLog); renderImport(); }
+}
+
+function chatRow(c, on) {
+  return `<div class="row ${on ? "sel" : ""}" data-s="${esc(c.session)}"><div class="${on ? "on" : ""}"><span class="cb">${ico.check}</span></div>
+    <div><div class="title">${esc(c.title)}</div><div class="sub">${ico.folder}<span class="ell">${esc(c.folder || "-")}</span>${c.archived ? ' · <span class="badge">Archived</span>' : ""}</div></div>
+    <div class="muted">${fmt(c.last)}</div><div class="num muted c-size">${size(c.bytes)}</div></div>`;
+}
+
+function renderImport() {
+  document.querySelectorAll("#steps .step").forEach((s, i) => { s.className = "step" + (i < step || step === 5 ? " done" : i === step ? " cur" : ""); });
+  const back = $("#impBack"), next = $("#impNext"), b = $("#impBody");
+  back.textContent = step === 0 ? "Cancel" : "Back"; back.style.display = step >= 4 ? "none" : "";
+  next.disabled = false; next.textContent = "Continue"; $("#impHint").textContent = "";
+  const errNote = impError ? `<div class="note err">${ico.err}<p>${esc(impError)}</p></div>` : "";
+
+  if (step === 0) {
+    const drop = zip
+      ? `<button class="btn" id="browse">${ico.file.replace('width="18" height="18"', 'width="14" height="14"')}Choose a different export…</button>`
+      : `<button class="file-drop" id="browse"><b style='color:var(--fg)'>Choose an export…</b><br><span style='font-size:13px'>A .zip made with ClaudeCarry</span></button>`;
+    b.innerHTML = drop +
+      (zip ? `<div class="file-card"><div class="file-ico">${ico.file}</div><div style="flex:1;min-width:0"><div style="font-weight:500" class="title">${esc(zip.name)}</div>
+        <div class="muted">Made ${fmt(zip.created)} on ${esc(zip.computer)} · ${plural(zip.chats.length, "chat")} · ${size(zip.bytes)}</div></div><span class="badge live">Valid export</span></div>` +
+        (zip.sameHome ? "" : `<div class="note warn">${ico.warn}<p>This export came from <span class="mono">${esc(zip.fromHome)}</span>. Chats only reopen if their project folders are at the same paths on this PC.</p></div>`) : "") + errNote;
+    $("#browse").onclick = pickZip;
+    next.disabled = !zip;
+  } else if (step === 1) {
+    const all = impSel.size === zip.chats.length;
+    b.innerHTML = zip.chats.length ? `<div style="display:flex;align-items:center;margin-bottom:8px"><span class="muted">${impSel.size} of ${zip.chats.length} selected</span><div class="spacer"></div>
+      <button class="btn ghost sm" id="iAll">${all ? "Clear" : "Select all"}</button></div>
+      <div class="mini">${zip.chats.map(c => chatRow(c, impSel.has(c.session))).join("")}</div>` +
+      (all && !zip.partial ? `<p class="muted" style="margin:10px 0 0;font-size:12px">With every chat selected, all transcripts in the export are restored, including ones that aren't in any sidebar.</p>` : "")
+      : `<div class="empty">This export has no chats, only memory and settings.</div>`;
+    b.querySelectorAll(".row").forEach(r => r.onclick = () => { impSel.has(r.dataset.s) ? impSel.delete(r.dataset.s) : impSel.add(r.dataset.s); renderImport(); });
+    if ($("#iAll")) $("#iAll").onclick = () => { impSel = all ? new Set() : new Set(zip.chats.map(c => c.session)); renderImport(); };
+    next.disabled = zip.chats.length > 0 && !impSel.size;
+  } else if (step === 2) {
+    b.innerHTML = `<div class="acct-pick">${accounts.map(a => `<button class="acct-opt ${a.id === impAcct ? "on" : ""}" data-id="${esc(a.id)}"><span class="radio"></span>
+      <div class="avatar" style="background:${color(a.id)}">${esc(a.short.slice(0, 2).toUpperCase())}</div>
+      <div style="flex:1"><div class="acct-name">${esc(a.short)}</div><div class="acct-meta">${plural(a.chats, "chat")} · last used ${ago(a.lastUsed)}</div></div>
+      ${a.current ? '<span class="badge live">Current</span>' : ""}</button>`).join("")}</div>`;
+    b.querySelectorAll(".acct-opt").forEach(o => o.onclick = () => { impAcct = o.dataset.id; renderImport(); });
+    next.disabled = !impAcct;
+  } else if (step === 3) {
+    const acct = accounts.find(a => a.id === impAcct);
+    if (!preview) {
+      b.innerHTML = errNote || `<div style="display:flex;gap:10px;align-items:center;padding:18px 0" class="muted"><span class="spin"></span>Checking what will be added…</div>`;
+      next.disabled = true; next.textContent = "Import";
+    } else {
+      const p = preview, skipped = p.chatsSkipped;
+      b.innerHTML = `<div class="summary">
+          <div class="stat"><b>${p.chats}</b><span>${p.chats === 1 ? "chat" : "chats"} to add</span></div>
+          <div class="stat"><b>${p.added + p.merged.length}</b><span>files to add</span></div>
+          <div class="stat"><b>${skipped + p.same}</b><span>already there, skipped</span></div></div>
+        <div class="note ok">${ico.shield}<p>A backup is made first. Nothing is overwritten or deleted.</p></div>` +
+        (p.claudeOpen ? `<div class="note warn">${ico.warn}<p>The Claude app is still open. Quit it completely (also from the tray icon), then click <b>Check again</b>.</p><button class="btn sm" id="recheck">Check again</button></div>` : "") +
+        (p.conflicts.length || p.settingsAside ? `<details><summary>${plural(p.conflicts.length + (p.settingsAside ? 1 : 0), "file")} ${p.conflicts.length + (p.settingsAside ? 1 : 0) === 1 ? "differs" : "differ"} from yours and will be left alone</summary><ul>${p.conflicts.map(c => `<li>${esc(c)}</li>`).join("")}${p.settingsAside ? "<li>settings.json (saved next to yours as settings.imported.json)</li>" : ""}</ul></details>` : "") +
+        `<p class="muted" style="margin:12px 0 0">Into account <b class="mono" style="color:var(--fg)">${esc(acct ? acct.short : impAcct)}</b>.</p>` + errNote;
+      if ($("#recheck")) $("#recheck").onclick = async () => { preview.claudeOpen = await api("claudeRunning"); renderImport(); };
+      next.disabled = p.claudeOpen || (p.chats === 0 && p.added === 0 && p.merged.length === 0);
+      next.textContent = p.chats ? `Import ${plural(p.chats, "chat")}` : "Import";
+      if (next.disabled && !p.claudeOpen) $("#impHint").textContent = "Nothing new to add.";
+    }
+  } else if (step === 4) {
+    b.innerHTML = `<div style="padding:12px 0"><div style="font-weight:500">Importing…</div><div class="progress"><i></i></div><div class="log-line" id="impLog">${esc(lastLog || "Making a backup")}</div></div>`;
+    next.disabled = true; next.textContent = "Importing…";
+  } else {
+    b.innerHTML = `<div style="text-align:center;padding:8px 0"><div class="done-ico">${ico.ok.replace(/16/g, "22")}</div>
+      <div style="font-weight:600;font-size:16px">${result.chats ? plural(result.chats, "chat") + " imported" : "Import finished"}</div>
+      <p class="muted" style="margin:4px 0 0">Start the Claude app. They're in the Code tab sidebar.</p>
+      <p class="muted" style="margin:14px 0 0;font-size:12px">Backup saved: <button class="link" id="showBackup">${esc((result.backup || "").split("\\").pop())}</button></p></div>`;
+    $("#showBackup").onclick = () => api("reveal", { path: result.backup });
+    next.textContent = "Done";
+  }
+}
+
+// ---------- sample data when the page is opened outside the app ----------
+function mock(cmd, a) {
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const M = mock.data || (mock.data = (() => {
+    const acc = [["869b76c5a1", 12, 0], ["64a221c2b2", 13, 13], ["a9bcfb55c3", 0, 13], ["25ced66dd4", 0, 37]];
+    const titles = ["Chat and memory import tool", "Breeze HUD overlay", "PBS Studio rebuild", "NYX", "4K IPTV app for webOS TV", "Roblox weapon pack guns", "Blender MCP connection", "Workspace overview"];
+    const accounts = acc.map((x, i) => ({ id: x[0] + "\\org" + i, short: x[0].slice(0, 8), chats: x[1], lastUsed: new Date(Date.now() - x[2] * 864e5).toISOString(), current: i === 0 }));
+    const chats = {};
+    accounts.forEach(ac => chats[ac.id] = Array.from({ length: ac.chats }, (_, i) => ({ key: ac.id + "|local_" + i, account: ac.id, session: "local_" + ac.short + i, title: titles[(i + ac.chats) % titles.length], cwd: "C:\\Users\\you\\Projects\\demo", folder: ["ClaudeCarry", "PS5-FanControl", "BlenderWork", "TV"][i % 4], last: new Date(Date.parse(ac.lastUsed) - i * 36e5 * 7).toISOString(), bytes: (i * 7919 % 50 + 1) * 1048576, archived: i === 7, hasTranscript: true })));
+    document.body.insertAdjacentHTML("beforeend", '<div class="mockup-tag">Preview with sample data</div>');
+    return { accounts, chats };
+  })());
+  switch (cmd) {
+    case "accounts": return Promise.resolve(M.accounts);
+    case "chats": return sleep(250).then(() => M.chats[a.account] || []);
+    case "theme": case "reveal": return Promise.resolve(null);
+    case "claudeRunning": return Promise.resolve(false);
+    case "export": return sleep(1200).then(() => ({ path: "C:\\demo.zip", name: "ClaudeCarry-demo.zip", bytes: 97e6 }));
+    case "pickZip": return sleep(200).then(() => ({ path: "C:\\demo.zip", name: "ClaudeCarry-demo.zip", bytes: 97e6, created: new Date().toISOString(), computer: "DEMO-PC", sameHome: true, partial: true, chats: M.chats[M.accounts[1].id].slice(0, 6) }));
+    case "preview": return sleep(500).then(() => ({ added: 366, same: 0, chats: a.sessions ? a.sessions.length : 6, chatsSkipped: 0, conflicts: ["projects\\demo\\memory\\notes.md"], merged: [], settingsAside: false }));
+    case "copyPreview": return sleep(300).then(() => ({ chats: a.chats.length, chatsSkipped: 0 }));
+    case "copy": return sleep(700).then(() => ({ chats: a.chats.length, chatsSkipped: 0, backup: "C:\\Users\\you\\Documents\\ClaudeCarry-backups\\before-copy-demo.zip" }));
+    case "import": return sleep(1500).then(() => ({ added: 366, chats: a.sessions ? a.sessions.length : 6, backup: "C:\\Users\\you\\Documents\\ClaudeCarry-backups\\before-import-demo.zip" }));
+  }
+  return Promise.resolve(null);
+}
+
+// ---------- start ----------
+(async () => {
+  let t = null; try { t = localStorage.getItem("theme"); } catch (e) {}
+  if (!t) t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  document.documentElement.dataset.theme = t; api("theme", { theme: t });
+  renderBar();
+  try { await loadAccounts(); } catch (e) { toast("err", "Couldn't read your accounts", e.message); }
+})();
+</script>
+</body>
+</html>

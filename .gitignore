@@ -1,0 +1,8 @@
+# Build output, release builds live outside the repo
+*.exe
+
+# Build/IDE leftovers
+bin/
+obj/
+*.pdb
+.vs/
