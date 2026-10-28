@@ -1,4 +1,4 @@
-<p align="center"><img src="assets/icon-256.png" width="128" height="128" alt="ClaudeCarry logo"></p>
+
 
 <h1 align="center">ClaudeCarry</h1>
 
