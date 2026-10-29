@@ -105,33 +105,42 @@ namespace ClaudeCarry
 
         static string Full(string p) { return Plain(System.IO.Path.GetFullPath(p)).TrimEnd('\\'); }
 
-        // The Claude app normally keeps its data in %APPDATA%\Claude. The Microsoft Store version runs in a
-        // package that redirects that folder to %LOCALAPPDATA%\Packages\<package>\LocalCache\Roaming\Claude.
+        // Where the Claude app can keep its data (the folder that holds claude-code-sessions):
+        //  - %APPDATA%\Claude: the version from the Claude installer.
+        //  - %LOCALAPPDATA%\Packages\<package>\LocalCache\Roaming\Claude: the Microsoft Store version, which redirects that folder.
+        //  - %LOCALAPPDATA%\Claude-Data\<name>: where newer Microsoft Store builds keep it, outside the package.
         static string StandardApp { get { return System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Claude"); } }
+        static string LocalApp { get { return Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData); } }
+        static string PackagesDir { get { return System.IO.Path.Combine(LocalApp, "Packages"); } }
 
-        static List<string> StoreApps()
+        static List<string> AppFolders()
         {
-            var list = new List<string>();
+            var list = new List<string> { StandardApp };
             try
             {
-                string packages = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Packages");
-                if (Directory.Exists(packages))
-                    foreach (var p in Directory.GetDirectories(packages))
+                if (Directory.Exists(PackagesDir))
+                    foreach (var p in Directory.GetDirectories(PackagesDir))
                     {
                         string d = System.IO.Path.Combine(p, "LocalCache", "Roaming", "Claude");
                         if (Directory.Exists(d)) list.Add(d);
                     }
             }
             catch (Exception) { }
+            try
+            {
+                foreach (var data in Directory.GetDirectories(LocalApp, "Claude-Data*"))
+                    list.AddRange(Directory.GetDirectories(data));
+            }
+            catch (Exception) { }
             return list;
         }
 
-        // The app folder that holds a chat list. With both versions installed, the one written to last wins.
+        // The app folder that holds a chat list. If several do, the one written to last wins.
         static string DetectApp()
         {
             string best = null;
             var bestTime = DateTime.MinValue;
-            foreach (var c in new[] { StandardApp }.Concat(StoreApps()))
+            foreach (var c in AppFolders())
             {
                 string sessions = System.IO.Path.Combine(c, "claude-code-sessions");
                 try
@@ -155,11 +164,14 @@ namespace ClaudeCarry
         {
             var list = new List<string>();
             if (appFixed) { list.Add(Plain(SessionsDir)); return list; }
-            list.Add(System.IO.Path.Combine(StandardApp, "claude-code-sessions"));
-            var store = StoreApps();
-            foreach (var s in store) list.Add(System.IO.Path.Combine(s, "claude-code-sessions"));
-            if (store.Count == 0)
-                list.Add(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Packages", "*", "LocalCache", "Roaming", "Claude", "claude-code-sessions"));
+            var folders = AppFolders();
+            foreach (var f in folders) list.Add(System.IO.Path.Combine(f, "claude-code-sessions"));
+            // Name the places that don't exist on this PC too, so the list shows everything that was tried.
+            string dataDir = System.IO.Path.Combine(LocalApp, "Claude-Data");
+            if (!folders.Any(f => f.StartsWith(PackagesDir, StringComparison.OrdinalIgnoreCase)))
+                list.Add(System.IO.Path.Combine(PackagesDir, "*", "LocalCache", "Roaming", "Claude", "claude-code-sessions"));
+            if (!folders.Any(f => f.StartsWith(dataDir, StringComparison.OrdinalIgnoreCase)))
+                list.Add(System.IO.Path.Combine(dataDir + "*", "*", "claude-code-sessions"));
             return list;
         }
 
@@ -170,8 +182,7 @@ namespace ClaudeCarry
             {
                 if (!appFixed) return true;
                 string a = Full(App);
-                return string.Equals(a, Full(StandardApp), StringComparison.OrdinalIgnoreCase) ||
-                       StoreApps().Any(s => string.Equals(a, Full(s), StringComparison.OrdinalIgnoreCase));
+                return AppFolders().Any(s => string.Equals(a, Full(s), StringComparison.OrdinalIgnoreCase));
             }
         }
 

@@ -48,9 +48,9 @@ Claude Code stores data in two places:
 A new account starts with an empty chat list, so ClaudeCarry only needs to copy list entries and, for zips,
 the transcripts and memory that belong with them.
 
-The Microsoft Store version of Claude keeps the chat list in `%LOCALAPPDATA%\Packages\<package>\LocalCache\Roaming\Claude\`
-instead of `%APPDATA%\Claude\`. ClaudeCarry checks both and uses the one that has a chat list. If it finds no accounts,
-the window lists the folders it looked in.
+The Microsoft Store version of Claude keeps the chat list somewhere else: in `%LOCALAPPDATA%\Packages\<package>\LocalCache\Roaming\Claude\`
+or, on newer builds, in `%LOCALAPPDATA%\Claude-Data\<name>\`. ClaudeCarry checks all of these and `%APPDATA%\Claude\`,
+and uses the one that has a chat list. If it finds no accounts, the window lists the folders it looked in.
 
 ## What's exported
 
