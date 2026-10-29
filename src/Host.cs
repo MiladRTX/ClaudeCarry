@@ -157,6 +157,9 @@ namespace ClaudeCarry
                 case "accounts":
                     return Accounts();
 
+                case "searched":
+                    return carry.SearchedFolders().ToArray();
+
                 case "chats":
                 {
                     var acc = carry.GetAccounts().FirstOrDefault(x => x.Id == Str(a, "account"));

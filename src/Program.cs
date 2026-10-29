@@ -83,6 +83,13 @@ namespace ClaudeCarry
             using (var r = new StreamReader(st, Encoding.UTF8)) return r.ReadToEnd();
         }
 
+        static void PrintSearched(Carry carry)
+        {
+            Console.WriteLine("No accounts found. Looked for chat lists in:");
+            foreach (var f in carry.SearchedFolders()) Console.WriteLine("  " + f);
+            Console.WriteLine("Log into Claude and open the Code tab once, or point to the folder with --app <Claude data folder>.");
+        }
+
         static int RunCli(string[] args)
         {
             if (!Console.IsOutputRedirected) AttachConsole(-1);
@@ -128,20 +135,28 @@ namespace ClaudeCarry
                     carry.CopyChats(chats, account, dry);
                 }
                 else if (cmd == "accounts")
-                    foreach (var a in carry.GetAccounts()) Console.WriteLine("{0}  chats: {1,3}  last used: {2:yyyy-MM-dd HH:mm}", a.Id, a.Chats, a.LastUsed);
+                {
+                    var found = carry.GetAccounts();
+                    foreach (var a in found) Console.WriteLine("{0}  chats: {1,3}  last used: {2:yyyy-MM-dd HH:mm}", a.Id, a.Chats, a.LastUsed);
+                    if (found.Count == 0) PrintSearched(carry);
+                }
                 else if (cmd == "chats")
-                    foreach (var a in carry.GetAccounts())
+                {
+                    var found = carry.GetAccounts();
+                    foreach (var a in found)
                     {
                         Console.WriteLine(a.Id);
                         foreach (var c in carry.GetChats(a)) Console.WriteLine("  {0}  {1:yyyy-MM-dd}  {2}{3}", c.SessionId, c.LastActivity, c.Title, c.HasTranscript ? "" : "  (no transcript)");
                     }
+                    if (found.Count == 0) PrintSearched(carry);
+                }
                 else if (cmd == "import")
                 {
                     if (pos.Count < 2) throw new ArgumentException("import needs the zip file: ClaudeCarry.exe import <file.zip>");
                     if (account == null)
                     {
                         var newest = carry.GetAccounts().FirstOrDefault();
-                        if (newest == null) throw new InvalidOperationException("No account folder found. Log in and open the Code tab once first.");
+                        if (newest == null) { PrintSearched(carry); throw new InvalidOperationException("No account folder found. Log in and open the Code tab once first."); }
                         account = newest.Id;
                     }
                     Console.WriteLine("Importing into account " + account + (dry ? " (dry run)" : ""));

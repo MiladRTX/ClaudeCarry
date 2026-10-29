@@ -47,7 +47,9 @@ namespace ClaudeCarry
     public class Carry
     {
         public string Home = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude");
-        public string App = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Claude");
+        string app = DetectApp();
+        bool appFixed;   // set by --app / CLAUDECARRY_APPDATA: stop looking for the app's folder ourselves
+        public string App { get { return app; } set { app = value; appFixed = true; } }
         public string BackupDir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "ClaudeCarry-backups");
         public Action<string> Log = delegate { };
 
@@ -103,7 +105,75 @@ namespace ClaudeCarry
 
         static string Full(string p) { return Plain(System.IO.Path.GetFullPath(p)).TrimEnd('\\'); }
 
-        public bool IsLiveApp { get { return string.Equals(Full(App), Full(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Claude")), StringComparison.OrdinalIgnoreCase); } }
+        // The Claude app normally keeps its data in %APPDATA%\Claude. The Microsoft Store version runs in a
+        // package that redirects that folder to %LOCALAPPDATA%\Packages\<package>\LocalCache\Roaming\Claude.
+        static string StandardApp { get { return System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Claude"); } }
+
+        static List<string> StoreApps()
+        {
+            var list = new List<string>();
+            try
+            {
+                string packages = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Packages");
+                if (Directory.Exists(packages))
+                    foreach (var p in Directory.GetDirectories(packages))
+                    {
+                        string d = System.IO.Path.Combine(p, "LocalCache", "Roaming", "Claude");
+                        if (Directory.Exists(d)) list.Add(d);
+                    }
+            }
+            catch (Exception) { }
+            return list;
+        }
+
+        // The app folder that holds a chat list. With both versions installed, the one written to last wins.
+        static string DetectApp()
+        {
+            string best = null;
+            var bestTime = DateTime.MinValue;
+            foreach (var c in new[] { StandardApp }.Concat(StoreApps()))
+            {
+                string sessions = System.IO.Path.Combine(c, "claude-code-sessions");
+                try
+                {
+                    if (!Directory.Exists(sessions)) continue;
+                    var t = Directory.GetLastWriteTime(sessions);
+                    foreach (var d in Directory.GetDirectories(sessions))
+                    {
+                        var dt = Directory.GetLastWriteTime(d);
+                        if (dt > t) t = dt;
+                    }
+                    if (best == null || t > bestTime) { best = c; bestTime = t; }
+                }
+                catch (Exception) { }
+            }
+            return best ?? StandardApp;
+        }
+
+        // The chat-list folders we look in, for the message shown when no account is found.
+        public List<string> SearchedFolders()
+        {
+            var list = new List<string>();
+            if (appFixed) { list.Add(Plain(SessionsDir)); return list; }
+            list.Add(System.IO.Path.Combine(StandardApp, "claude-code-sessions"));
+            var store = StoreApps();
+            foreach (var s in store) list.Add(System.IO.Path.Combine(s, "claude-code-sessions"));
+            if (store.Count == 0)
+                list.Add(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Packages", "*", "LocalCache", "Roaming", "Claude", "claude-code-sessions"));
+            return list;
+        }
+
+        // False when pointed at a copy for testing, so the "Claude is running" check doesn't apply.
+        public bool IsLiveApp
+        {
+            get
+            {
+                if (!appFixed) return true;
+                string a = Full(App);
+                return string.Equals(a, Full(StandardApp), StringComparison.OrdinalIgnoreCase) ||
+                       StoreApps().Any(s => string.Equals(a, Full(s), StringComparison.OrdinalIgnoreCase));
+            }
+        }
 
         // True while the Claude desktop app runs. The Claude Code CLI is also named claude.exe, so
         // only processes from the app's install folders count; one we can't inspect counts too.
@@ -127,6 +197,7 @@ namespace ClaudeCarry
         public List<AccountInfo> GetAccounts()
         {
             var list = new List<AccountInfo>();
+            if (!appFixed) app = DetectApp();   // the folder may have appeared since the window opened
             if (!Directory.Exists(SessionsDir)) return list;
             foreach (var a in Directory.GetDirectories(SessionsDir))
                 foreach (var o in Directory.GetDirectories(a))

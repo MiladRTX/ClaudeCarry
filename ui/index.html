@@ -95,6 +95,8 @@
   .title { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .sub { font-size: 12px; color: var(--fg-muted); display: flex; gap: 6px; align-items: center; margin-top: 2px; }
   .muted { color: var(--fg-muted); font-size: 13px; }
+  .where { margin-top: 12px; font-size: 11px; color: var(--fg-faint); word-break: break-all; user-select: text; }
+  .where div { margin-top: 4px; }
   .num { text-align: right; font-variant-numeric: tabular-nums; }
   .folder { display: inline-flex; align-items: center; gap: 6px; color: var(--fg-muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
   .folder svg, .sub svg { flex: none; }
@@ -323,12 +325,13 @@ const ago = iso => { const d = new Date(iso), days = Math.floor((Date.now() - d)
 const plural = (n, w) => n + " " + w + (n === 1 ? "" : "s");
 
 // ---------- state ----------
-let accounts = [], cur = null, chats = [], filter = "all", q = "", loading = false, working = false;
+let accounts = [], searched = [], cur = null, chats = [], filter = "all", q = "", loading = false, working = false;
 const selected = new Map();           // key -> chat
 const chatCache = new Map();          // account id -> chats
 
 async function loadAccounts(keepId) {
   accounts = await api("accounts");
+  searched = accounts.length ? [] : (await api("searched").catch(() => null)) || [];   // shown when nothing was found
   cur = accounts.find(a => a.id === keepId) || accounts[0] || null;
   renderAccounts();
   await loadChats();
@@ -359,7 +362,8 @@ function renderAccounts() {
       <div class="avatar" style="background:${color(a.id)}">${esc(a.short.slice(0, 2).toUpperCase())}</div>
       <div class="acct-body"><div class="acct-name">${esc(a.short)}</div><div class="acct-meta">${plural(a.chats, "chat")} · ${ago(a.lastUsed)}</div>${perAcct[a.id] ? `<div class="acct-sel">${perAcct[a.id]} selected</div>` : ""}</div>
       ${a.current ? '<span class="badge live">Current</span>' : ""}
-    </button>`).join("") : `<div class="muted" style="padding:8px">No accounts yet. Log into Claude and open the Code tab once.</div>`;
+    </button>`).join("") : `<div class="muted" style="padding:8px">No accounts yet. Log into Claude and open the Code tab once.${searched.length ? `
+      <div class="where"><b>Looked in:</b>${searched.map(p => `<div>${esc(p)}</div>`).join("")}</div>` : ""}</div>`;
   document.querySelectorAll(".acct").forEach(b => b.onclick = () => { cur = accounts.find(a => a.id === b.dataset.id); renderAccounts(); loadChats(); });
   renderPaste();
 }

@@ -48,6 +48,10 @@ Claude Code stores data in two places:
 A new account starts with an empty chat list, so ClaudeCarry only needs to copy list entries and, for zips,
 the transcripts and memory that belong with them.
 
+The Microsoft Store version of Claude keeps the chat list in `%LOCALAPPDATA%\Packages\<package>\LocalCache\Roaming\Claude\`
+instead of `%APPDATA%\Claude\`. ClaudeCarry checks both and uses the one that has a chat list. If it finds no accounts,
+the window lists the folders it looked in.
+
 ## What's exported
 
 | Included | Not included |
@@ -101,6 +105,10 @@ ClaudeCarry.exe export [out.zip] [--chats local_aaa,local_bbb] [--no-shared]
 ClaudeCarry.exe import <file.zip> [--account <accountId>\<orgId>] [--chats local_aaa,...] [--dry-run]
 ClaudeCarry.exe copy --chats local_aaa,... --account <accountId>\<orgId> [--dry-run]
 ```
+
+If ClaudeCarry can't find your accounts, add `--app "<Claude data folder>"` to any command to point it at the folder
+that contains `claude-code-sessions`. In the window, set the `CLAUDECARRY_APPDATA` environment variable to the same folder.
+Both turn off the "Claude is running" check, so quit Claude first.
 
 ## Building from source
 
