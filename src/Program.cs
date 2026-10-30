@@ -15,8 +15,8 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
 
-[assembly: AssemblyVersion("1.5.3.0")]
-[assembly: AssemblyFileVersion("1.5.3.0")]
+[assembly: AssemblyVersion("1.6.0.0")]
+[assembly: AssemblyFileVersion("1.6.0.0")]
 [assembly: AssemblyProduct("ClaudeCarry")]
 [assembly: AssemblyTitle("ClaudeCarry")]
 
