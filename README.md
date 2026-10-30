@@ -1,5 +1,10 @@
 
-<p align="center"><img src="assets/icon-256.png" width="128" height="128" alt="ClaudeCarry logo"></p>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/icon-256-dark.png">
+    <img src="assets/icon-256.png" width="128" height="128" alt="ClaudeCarry logo">
+  </picture>
+</p>
 
 <h1 align="center">ClaudeCarry</h1>
 
