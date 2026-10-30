@@ -252,7 +252,6 @@
     <label class="switch on" id="shared" title="Include memory, skills and settings: adds the memory of the chosen chats' projects, plus CLAUDE.md, skills and settings (secrets removed)"><i></i><span class="lbl">Include memory, skills &amp; settings</span></label>
     <button class="btn" id="copyBtn" title="Copy the selected chats, then paste them into another account (Ctrl+C)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span>Copy</span></button>
     <button class="btn" id="importBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>Import</button>
-    <button class="btn" id="exportAll">Export everything</button>
     <button class="btn primary" id="exportSel"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21V9m0 0-4 4m4-4 4 4M4 7V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2"/></svg><span>Export</span></button>
   </footer>
 </div>
@@ -403,10 +402,10 @@ function renderChats() {
 function renderBar() {
   const n = selected.size, accts = new Set([...selected.values()].map(c => c.account)).size;
   const bytes = [...selected.values()].reduce((s, c) => s + c.bytes, 0);
-  $("#selInfo").innerHTML = n ? `<b>${n}</b> ${n === 1 ? "chat" : "chats"} selected${accts > 1 ? ` from ${accts} accounts` : ""} · ${size(bytes)}` : "Select chats to export, or export everything.";
+  $("#selInfo").innerHTML = n ? `<b>${n}</b> ${n === 1 ? "chat" : "chats"} selected${accts > 1 ? ` from ${accts} accounts` : ""} · ${size(bytes)}` : "Select chats to export.";
   $("#exportSel span").textContent = n ? `Export ${plural(n, "chat")}` : "Export";
   $("#exportSel").disabled = $("#copyBtn").disabled = !n || working;
-  $("#exportAll").disabled = $("#importBtn").disabled = working;
+  $("#importBtn").disabled = working;
   renderPaste();
 }
 
@@ -464,7 +463,6 @@ async function doExport(keys) {
   finally { logListeners.delete(onLog); working = false; renderBar(); }
 }
 $("#exportSel").onclick = () => doExport([...selected.keys()]);
-$("#exportAll").onclick = () => doExport(null);
 
 // ---------- copy & paste between accounts (no zip) ----------
 let clip = [];                        // copied chats

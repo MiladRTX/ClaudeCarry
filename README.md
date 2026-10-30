@@ -30,7 +30,7 @@ exports them, copies the list entries to the new account, and the chats show up 
 ## Quick start
 
 1. Quit the Claude app completely (also from the tray icon).
-2. Open **ClaudeCarry.exe**, click **Export everything**, and save the zip.
+2. Open **ClaudeCarry.exe**, select the chats you want (**Select all** or Ctrl+A picks every chat of the account you're looking at, and you can add chats from other accounts), click **Export**, and save the zip.
 3. In Claude, log out, log into the new account, open the **Code** tab once, then quit Claude again.
 4. In ClaudeCarry, click **Refresh**, then **Import**. Pick the zip, choose your chats and the new account, and click **Import**.
 5. Start Claude. The chats are in the sidebar.
@@ -61,7 +61,7 @@ and uses the one that has a chat list. If it finds no accounts, the window lists
 | Each project's memory (`memory\`) | Secrets in `settings.json` (see below) |
 | `CLAUDE.md` and `skills\` (except `.trash`) | Caches, shell snapshots, file history, plugins |
 | `settings.json`, with secrets removed | |
-| Chat lists for every account on this PC | |
+| The chat list entries of the chats you picked | |
 
 The memory and settings options can be turned off with the **Include memory, skills & settings** switch.
 
@@ -107,6 +107,8 @@ ClaudeCarry.exe export [out.zip] [--chats local_aaa,local_bbb] [--no-shared]
 ClaudeCarry.exe import <file.zip> [--account <accountId>\<orgId>] [--chats local_aaa,...] [--dry-run]
 ClaudeCarry.exe copy --chats local_aaa,... --account <accountId>\<orgId> [--dry-run]
 ```
+
+Without `--chats`, `export` takes everything on the PC: every account's chat list and every transcript. The window only exports the chats you select.
 
 If ClaudeCarry can't find your accounts, add `--app "<Claude data folder>"` to any command to point it at the folder
 that contains `claude-code-sessions`. In the window, set the `CLAUDECARRY_APPDATA` environment variable to the same folder.

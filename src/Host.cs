@@ -222,7 +222,8 @@ namespace ClaudeCarry
                 case "export":
                 {
                     if (busy) throw new CarryError("busy", "Another job is still running.");
-                    var keys = StrList(a, "chats");     // "accountId|local_x", or null for everything
+                    var keys = StrList(a, "chats");     // "accountId|local_x" of the selected chats
+                    if (keys == null || keys.Count == 0) throw new CarryError("nothing", "Select at least one chat to export.");
                     bool shared = !a.ContainsKey("shared") || Convert.ToBoolean(a["shared"]);
                     var dlg = new SaveFileDialog
                     {
@@ -240,11 +241,12 @@ namespace ClaudeCarry
                         int count = 0;
                         await Task.Run(() =>
                         {
-                            List<ChatInfo> chats = null;
-                            if (keys != null) { chats = ResolveChats(keys); count = chats.Count; }
+                            var chats = ResolveChats(keys);
+                            if (chats.Count == 0) throw new CarryError("nothing", "The selected chats were not found. Click Refresh and try again.");
+                            count = chats.Count;
                             carry.Export(path, chats, shared);
                         });
-                        return new Dictionary<string, object> { { "path", path }, { "name", Path.GetFileName(path) }, { "bytes", new FileInfo(path).Length }, { "chats", keys == null ? -1 : count } };
+                        return new Dictionary<string, object> { { "path", path }, { "name", Path.GetFileName(path) }, { "bytes", new FileInfo(path).Length }, { "chats", count } };
                     }
                     finally { busy = false; }
                 }
