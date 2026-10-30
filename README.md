@@ -74,7 +74,8 @@ If you keep unusual secrets in settings, check the exported `claude/settings.jso
 ## Import and copy rules
 
 - **Backups:** before anything changes, a backup zip is written to `Documents\ClaudeCarry-backups\`.
-- **Only adds:** files that don't exist are copied in. Identical files are skipped.
+- **Only adds:** files that don't exist are copied in. Identical files are skipped. Only what an export contains is restored
+  (projects, skills, `CLAUDE.md`, `settings.json`); any other file in a zip is ignored.
 - **Never overwrites:** a file that differs is left alone and listed. The one exception is `MEMORY.md`: missing lines are
   appended and nothing is removed. A different `settings.json` is saved next to yours as `settings.imported.json`
   (or `settings.imported-2.json` and so on, if that already exists).

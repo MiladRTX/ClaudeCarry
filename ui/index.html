@@ -588,7 +588,7 @@ async function runImport() {
   try {
     const all = impSel.size === zip.chats.length;
     result = await api("import", { zip: zip.path, account: impAcct, sessions: all ? null : [...impSel] });
-    step = 5; chatCache.clear(); loadAccounts(cur && cur.id);
+    step = 5; chatCache.clear(); loadAccounts(cur && cur.id).catch(() => {});
   } catch (e) {
     step = 3;
     if (e.code === "claude_running") preview.claudeOpen = true; else impError = e.message;

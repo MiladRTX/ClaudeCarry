@@ -106,14 +106,15 @@ namespace ClaudeCarry
 
         async void OnMessage(string json)
         {
-            var msg = js.DeserializeObject(json) as Dictionary<string, object>;
+            Dictionary<string, object> msg;
+            try { msg = js.DeserializeObject(json) as Dictionary<string, object>; } catch (Exception) { return; }   // never throw out of an async void
             if (msg == null) return;
             object id = msg.ContainsKey("id") ? msg["id"] : null;
-            string cmd = Convert.ToString(msg["cmd"]);
             var args = msg.ContainsKey("args") ? msg["args"] as Dictionary<string, object> : null;
             if (args == null) args = new Dictionary<string, object>();
             try
             {
+                string cmd = msg.ContainsKey("cmd") ? Convert.ToString(msg["cmd"]) : "";
                 object result = await Run(cmd, args);
                 Post(new Dictionary<string, object> { { "id", id }, { "ok", true }, { "result", result } });
             }
@@ -162,7 +163,7 @@ namespace ClaudeCarry
 
                 case "chats":
                 {
-                    var acc = carry.GetAccounts().FirstOrDefault(x => x.Id == Str(a, "account"));
+                    var acc = carry.FindAccount(Str(a, "account"));
                     if (acc == null) return new object[0];
                     return await Task.Run(() => carry.GetChats(acc).Select(Chat).ToArray());
                 }
@@ -288,7 +289,7 @@ namespace ClaudeCarry
         {
             var want = new HashSet<string>(keys, StringComparer.OrdinalIgnoreCase);
             var index = carry.TranscriptIndex();
-            return carry.GetAccounts().Where(x => keys.Any(k => k.StartsWith(x.Id + "|")))
+            return carry.EnumerateAccounts().Where(x => keys.Any(k => k.StartsWith(x.Id + "|")))
                 .SelectMany(x => carry.GetChats(x, index)).Where(c => want.Contains(c.AccountId + "|" + c.SessionId)).ToList();
         }
 

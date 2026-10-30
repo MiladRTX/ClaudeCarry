@@ -15,8 +15,8 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
 
-[assembly: AssemblyVersion("1.5.2.0")]
-[assembly: AssemblyFileVersion("1.5.2.0")]
+[assembly: AssemblyVersion("1.5.3.0")]
+[assembly: AssemblyFileVersion("1.5.3.0")]
 [assembly: AssemblyProduct("ClaudeCarry")]
 [assembly: AssemblyTitle("ClaudeCarry")]
 
@@ -71,7 +71,12 @@ namespace ClaudeCarry
                 if (!File.Exists(dll) || new FileInfo(dll).Length != st.Length)
                 {
                     Directory.CreateDirectory(dir);
-                    using (var f = File.Create(dll)) st.CopyTo(f);
+                    try { using (var f = File.Create(dll)) st.CopyTo(f); }
+                    catch (IOException)
+                    {
+                        // A second copy of ClaudeCarry starting at the same moment may hold the file; that's fine if it's complete.
+                        if (!File.Exists(dll) || new FileInfo(dll).Length != st.Length) throw;
+                    }
                 }
             }
             return dir;
@@ -124,14 +129,14 @@ namespace ClaudeCarry
                 if (cmd == "export")
                 {
                     List<ChatInfo> chats = null;
-                    if (only != null) chats = carry.GetAccounts().SelectMany(a => carry.GetChats(a)).Where(c => only.Contains(c.SessionId)).ToList();
+                    if (only != null) chats = carry.GetAllChats().Where(c => only.Contains(c.SessionId)).ToList();
                     string outPath = pos.Count > 1 ? pos[1] : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "ClaudeCarry-" + DateTime.Now.ToString("yyyy-MM-dd_HHmm") + ".zip");
                     carry.Export(outPath, chats, shared);
                 }
                 else if (cmd == "copy")
                 {
                     if (only == null || account == null) throw new ArgumentException("copy needs --chats and --account");
-                    var chats = carry.GetAccounts().SelectMany(a => carry.GetChats(a)).Where(c => only.Contains(c.SessionId)).ToList();
+                    var chats = carry.GetAllChats().Where(c => only.Contains(c.SessionId)).ToList();
                     carry.CopyChats(chats, account, dry);
                 }
                 else if (cmd == "accounts")
@@ -143,10 +148,11 @@ namespace ClaudeCarry
                 else if (cmd == "chats")
                 {
                     var found = carry.GetAccounts();
+                    var index = carry.TranscriptIndex();
                     foreach (var a in found)
                     {
                         Console.WriteLine(a.Id);
-                        foreach (var c in carry.GetChats(a)) Console.WriteLine("  {0}  {1:yyyy-MM-dd}  {2}{3}", c.SessionId, c.LastActivity, c.Title, c.HasTranscript ? "" : "  (no transcript)");
+                        foreach (var c in carry.GetChats(a, index)) Console.WriteLine("  {0}  {1:yyyy-MM-dd}  {2}{3}", c.SessionId, c.LastActivity, c.Title, c.HasTranscript ? "" : "  (no transcript)");
                     }
                     if (found.Count == 0) PrintSearched(carry);
                 }

@@ -6,10 +6,12 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Web.Script.Serialization;
+using Microsoft.Win32.SafeHandles;
 
 namespace ClaudeCarry
 {
@@ -92,9 +94,11 @@ namespace ClaudeCarry
         string HomeL { get { return LP(Home); } }
         string SessionsDir { get { return System.IO.Path.Combine(LP(App), "claude-code-sessions"); } }
 
+        // One serializer per thread: building one for every chat file is wasted work, and an instance isn't thread-safe.
+        [ThreadStatic] static JavaScriptSerializer jsonCache;
         static JavaScriptSerializer Json()
         {
-            return new JavaScriptSerializer { MaxJsonLength = int.MaxValue, RecursionLimit = 1000 };
+            return jsonCache ?? (jsonCache = new JavaScriptSerializer { MaxJsonLength = int.MaxValue, RecursionLimit = 1000 });
         }
 
         static Dictionary<string, object> TryParse(string text)
@@ -186,43 +190,102 @@ namespace ClaudeCarry
             }
         }
 
+        [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr OpenProcess(int access, bool inherit, int pid);
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)] static extern bool QueryFullProcessImageName(IntPtr h, int flags, StringBuilder name, ref int size);
+        [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
+
+        // Process.MainModule is refused for some processes (one running as administrator, for instance),
+        // so fall back to a call that needs less access. Null when the path can't be read at all.
+        static string ImagePath(Process p)
+        {
+            try { return p.MainModule.FileName; } catch (Exception) { }
+            try
+            {
+                IntPtr h = OpenProcess(0x1000, false, p.Id);   // PROCESS_QUERY_LIMITED_INFORMATION
+                if (h == IntPtr.Zero) return null;
+                try
+                {
+                    var sb = new StringBuilder(1024);
+                    int size = sb.Capacity;
+                    return QueryFullProcessImageName(h, 0, sb, ref size) ? sb.ToString() : null;
+                }
+                finally { CloseHandle(h); }
+            }
+            catch (Exception) { return null; }
+        }
+
         // True while the Claude desktop app runs. The Claude Code CLI is also named claude.exe, so
         // only processes from the app's install folders count; one we can't inspect counts too.
         public static bool ClaudeRunning()
         {
+            bool running = false;
             foreach (var p in Process.GetProcessesByName("claude"))
-            {
-                string path;
-                try { path = p.MainModule.FileName; } catch (Exception) { return true; }
-                finally { p.Dispose(); }
-                if (path.IndexOf(@"\AnthropicClaude\", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                    path.IndexOf(@"\WindowsApps\", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                    path.IndexOf(@"\Claude\claude-code\", StringComparison.OrdinalIgnoreCase) >= 0)   // CLI started by the app
-                    return true;
-            }
-            return false;
+                using (p)
+                {
+                    if (running) continue;
+                    string path = ImagePath(p);
+                    if (path == null ||
+                        path.IndexOf(@"\AnthropicClaude\", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        path.IndexOf(@"\WindowsApps\", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        path.IndexOf(@"\Claude\claude-code\", StringComparison.OrdinalIgnoreCase) >= 0 ||   // CLI started by the app
+                        path.IndexOf(@"\Claude-Data\", StringComparison.OrdinalIgnoreCase) >= 0)
+                        running = true;
+                }
+            return running;
         }
 
         // ---------- accounts ----------
 
-        public List<AccountInfo> GetAccounts()
+        // The account folders, without scanning their activity: enough to find a chat list or write into one.
+        public List<AccountInfo> EnumerateAccounts()
         {
             var list = new List<AccountInfo>();
             if (!appFixed) app = DetectApp();   // the folder may have appeared since the window opened
             if (!Directory.Exists(SessionsDir)) return list;
             foreach (var a in Directory.GetDirectories(SessionsDir))
-                foreach (var o in Directory.GetDirectories(a))
+            {
+                string[] orgs;
+                try { orgs = Directory.GetDirectories(a); } catch (Exception) { continue; }
+                foreach (var o in orgs)
+                    list.Add(new AccountInfo { Id = System.IO.Path.GetFileName(a) + "\\" + System.IO.Path.GetFileName(o), Path = o });
+            }
+            return list;
+        }
+
+        // Every account with its chat count and when the app last used it, newest first.
+        public List<AccountInfo> GetAccounts()
+        {
+            var list = new List<AccountInfo>();
+            foreach (var acc in EnumerateAccounts())
+            {
+                try
                 {
-                    var chats = Directory.GetFiles(o, "local_*.json");
-                    list.Add(new AccountInfo
-                    {
-                        Id = System.IO.Path.GetFileName(a) + "\\" + System.IO.Path.GetFileName(o),
-                        Path = o,
-                        Chats = chats.Length,
-                        LastUsed = LastUsed(o, chats)
-                    });
+                    var chats = Directory.GetFiles(acc.Path, "local_*.json");
+                    acc.Chats = chats.Length;
+                    acc.LastUsed = LastUsed(acc.Path, chats);
+                    list.Add(acc);
                 }
+                catch (Exception) { }   // a folder that vanished or can't be read is left out, not fatal
+            }
             return list.OrderByDescending(x => x.LastUsed).ToList();
+        }
+
+        // "<accountId>\<orgId>" to its folder. Anything else (such as "..\x") is refused.
+        string AccountDir(string accountId)
+        {
+            var parts = (accountId ?? "").Split('\\');
+            var bad = System.IO.Path.GetInvalidFileNameChars();
+            if (parts.Length != 2 || parts.Any(p => p.Length == 0 || p == "." || p == ".." || p.IndexOfAny(bad) >= 0))
+                throw new ArgumentException("Not a valid account id: " + accountId);
+            return System.IO.Path.Combine(SessionsDir, accountId);
+        }
+
+        // One account by id, or null; skips the activity scan GetAccounts does.
+        public AccountInfo FindAccount(string accountId)
+        {
+            string dir;
+            try { dir = AccountDir(accountId); } catch (ArgumentException) { return null; }
+            return Directory.Exists(dir) ? new AccountInfo { Id = accountId, Path = dir } : null;
         }
 
         // When the app last used this account, from what only the Claude app writes: scheduled-tasks.json,
@@ -232,16 +295,15 @@ namespace ClaudeCarry
         static DateTime LastUsed(string dir, string[] chats)
         {
             var newest = DateTime.MinValue;
-            foreach (var f in Directory.GetFiles(dir, "*", SearchOption.AllDirectories))
+            // One walk over files and folders; the times come with the listing, so nothing is looked up twice.
+            foreach (var fi in new DirectoryInfo(dir).EnumerateFileSystemInfos("*", SearchOption.AllDirectories))
             {
-                string n = System.IO.Path.GetFileName(f);
-                if ((n.StartsWith("local_") && n.EndsWith(".json")) || n == "archived-sessions.idx") continue;
-                var t = File.GetLastWriteTime(f);
-                if (t > newest) newest = t;
-            }
-            foreach (var d in Directory.GetDirectories(dir, "*", SearchOption.AllDirectories))
-            {
-                var t = Directory.GetLastWriteTime(d);
+                if (fi is FileInfo)
+                {
+                    string n = fi.Name;
+                    if ((n.StartsWith("local_") && n.EndsWith(".json")) || n == "archived-sessions.idx") continue;
+                }
+                var t = fi.LastWriteTime;
                 if (t > newest) newest = t;
             }
             if (newest != DateTime.MinValue) return newest;
@@ -275,7 +337,8 @@ namespace ClaudeCarry
 
         class Stats { public int Files; public long Bytes; public List<string> Failed = new List<string>(); }
 
-        static void AddFile(ZipArchive zip, string path, string entryName)
+        // Returns the size of the file that was added.
+        static long AddFile(ZipArchive zip, string path, string entryName)
         {
             // FileShare.ReadWrite so transcripts of running chats can still be read.
             using (var src = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1 << 16))
@@ -284,6 +347,7 @@ namespace ClaudeCarry
                 var entry = zip.CreateEntry(entryName, level);
                 entry.LastWriteTime = ZipTime(File.GetLastWriteTime(path));
                 using (var dst = entry.Open()) src.CopyTo(dst, 1 << 16);
+                return src.Length;
             }
         }
 
@@ -300,9 +364,8 @@ namespace ClaudeCarry
         {
             try
             {
-                AddFile(zip, path, entryName);
+                stats.Bytes += AddFile(zip, path, entryName);
                 stats.Files++;
-                stats.Bytes += new FileInfo(path).Length;
             }
             catch (Exception) { stats.Failed.Add(label); }
         }
@@ -345,11 +408,31 @@ namespace ClaudeCarry
         static void WriteNew(ZipArchiveEntry e, string path)
         {
             Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path));
-            // CreateNew: fails instead of overwriting if something appeared in the meantime.
-            using (var dst = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1 << 16))
-            using (var src = e.Open()) src.CopyTo(dst, 1 << 16);
-            File.SetLastWriteTime(path, e.LastWriteTime.DateTime);
+            bool created = false, timeSet = false;
+            try
+            {
+                // CreateNew: fails instead of overwriting if something appeared in the meantime.
+                using (var dst = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1 << 16))
+                {
+                    created = true;
+                    using (var src = e.Open()) src.CopyTo(dst, 1 << 16);
+                    dst.Flush();
+                    // Set through the open handle: File.SetLastWriteTime would open the file a second time.
+                    long ft = e.LastWriteTime.DateTime.ToFileTime();
+                    timeSet = SetFileTime(dst.SafeFileHandle, IntPtr.Zero, IntPtr.Zero, ref ft);
+                }
+                if (!timeSet) File.SetLastWriteTime(path, e.LastWriteTime.DateTime);
+            }
+            catch (Exception)
+            {
+                // A half-written file (disk full, read error) must not stay: it would look like a conflict forever.
+                if (created) try { File.Delete(path); } catch (Exception) { }
+                throw;
+            }
         }
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        static extern bool SetFileTime(SafeFileHandle h, IntPtr creation, IntPtr access, ref long lastWrite);
 
         // ---------- settings without secrets ----------
 
@@ -439,6 +522,13 @@ namespace ClaudeCarry
             return GetChats(acc, TranscriptIndex());
         }
 
+        // The chats of every account; the transcript folders are scanned once, not once per account.
+        public List<ChatInfo> GetAllChats()
+        {
+            var index = TranscriptIndex();
+            return EnumerateAccounts().SelectMany(a => GetChats(a, index)).ToList();
+        }
+
         public List<ChatInfo> GetChats(AccountInfo acc, Dictionary<string, string> index)
         {
             var list = new List<ChatInfo>();
@@ -456,7 +546,7 @@ namespace ClaudeCarry
                     {
                         c.Size = new FileInfo(System.IO.Path.Combine(dir, c.CliId + ".jsonl")).Length;
                         string sub = System.IO.Path.Combine(dir, c.CliId);
-                        if (Directory.Exists(sub)) c.Size += Directory.EnumerateFiles(sub, "*", SearchOption.AllDirectories).Sum(x => new FileInfo(x).Length);
+                        if (Directory.Exists(sub)) c.Size += new DirectoryInfo(sub).EnumerateFiles("*", SearchOption.AllDirectories).Sum(x => x.Length);
                     }
                     catch (Exception) { }
                 }
@@ -465,40 +555,56 @@ namespace ClaudeCarry
             return list.OrderByDescending(x => x.LastActivity).ToList();
         }
 
+        static readonly Regex ZipTranscript = new Regex(@"^claude/projects/[^/]+/([^/]+)\.jsonl$");
+        static readonly Regex ZipChatFiles = new Regex(@"^claude/projects/[^/]+/([^/]+)/");
+        static readonly Regex ZipArchivedIdx = new Regex(@"^app/sessions/(.+)/archived-sessions\.idx$");
+        static readonly Regex ZipChatEntry = new Regex(@"^app/sessions/(.+)/(local_[^/]+\.json)$");
+
         // Chats inside an export zip that have their transcript included.
         public static List<ChatInfo> ListZipChats(string zipPath)
         {
             var list = new List<ChatInfo>();
             using (var zip = ZipFile.OpenRead(LP(zipPath)))
             {
-                var transcripts = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+                var transcripts = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);   // chat id -> transcript size
+                var extra = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);         // subagent logs and tool results count towards a chat's size
                 var archived = new Dictionary<string, HashSet<string>>();
+                var chatEntries = new List<ZipArchiveEntry>();
+                // One pass over the entries (an export can hold tens of thousands).
                 foreach (var e in zip.Entries)
                 {
-                    var m = Regex.Match(e.FullName, @"^claude/projects/[^/]+/([^/]+)\.jsonl$");
-                    if (m.Success) transcripts[m.Groups[1].Value] = e.Length;
-                    m = Regex.Match(e.FullName, @"^app/sessions/(.+)/archived-sessions\.idx$");
-                    if (m.Success) archived[m.Groups[1].Value] = ReadArchived(ReadText(e));
-                }
-                // Subagent logs and tool results count towards a chat's size.
-                foreach (var e in zip.Entries)
-                {
-                    var m = Regex.Match(e.FullName, @"^claude/projects/[^/]+/([^/]+)/");
-                    long n;
-                    if (m.Success && transcripts.TryGetValue(m.Groups[1].Value, out n)) transcripts[m.Groups[1].Value] = n + e.Length;
+                    string name = e.FullName;
+                    if (name.StartsWith("claude/projects/"))
+                    {
+                        var m = ZipTranscript.Match(name);
+                        if (m.Success) { transcripts[m.Groups[1].Value] = e.Length; continue; }
+                        m = ZipChatFiles.Match(name);
+                        if (m.Success)
+                        {
+                            long n;
+                            extra.TryGetValue(m.Groups[1].Value, out n);
+                            extra[m.Groups[1].Value] = n + e.Length;
+                        }
+                    }
+                    else if (name.StartsWith("app/sessions/"))
+                    {
+                        var m = ZipArchivedIdx.Match(name);
+                        if (m.Success) archived[m.Groups[1].Value] = ReadArchived(ReadText(e));
+                        else if (ZipChatEntry.IsMatch(name)) chatEntries.Add(e);
+                    }
                 }
                 var seen = new HashSet<string>();
-                foreach (var e in zip.Entries)
+                foreach (var e in chatEntries)
                 {
-                    var m = Regex.Match(e.FullName, @"^app/sessions/(.+)/(local_[^/]+\.json)$");
-                    if (!m.Success) continue;
+                    var m = ZipChatEntry.Match(e.FullName);
                     HashSet<string> arch;
                     if (!archived.TryGetValue(m.Groups[1].Value, out arch)) arch = new HashSet<string>();
                     var c = ParseChat(m.Groups[1].Value.Replace('/', '\\'), m.Groups[2].Value, ReadText(e), arch);
-                    long size;
+                    long size, more;
                     if (c == null || !transcripts.TryGetValue(c.CliId, out size) || !seen.Add(c.SessionId)) continue;
+                    extra.TryGetValue(c.CliId, out more);
                     c.HasTranscript = true;
-                    c.Size = size;
+                    c.Size = size + more;
                     list.Add(c);
                 }
             }
@@ -516,13 +622,15 @@ namespace ClaudeCarry
             var stats = new Stats();
             Log("Exporting to " + Plain(outPath) + " ...");
 
-            var accounts = GetAccounts();
+            var accounts = EnumerateAccounts();
             string projects = System.IO.Path.Combine(HomeL, "projects");
+            bool created = false;   // only a file we made may be deleted again below
             try
             {
                 using (var fs = new FileStream(outPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 1 << 16))
                 using (var zip = new ZipArchive(fs, ZipArchiveMode.Create))
                 {
+                    created = true;
                     if (chats == null)
                     {
                         // Transcripts, subagent logs, tool results and memory for every project.
@@ -600,7 +708,7 @@ namespace ClaudeCarry
             catch (Exception)
             {
                 // Don't leave a half-written zip behind (it would also block retrying with the same name).
-                try { File.Delete(outPath); } catch (Exception) { }
+                if (created) try { File.Delete(outPath); } catch (Exception) { }
                 throw;
             }
 
@@ -626,20 +734,31 @@ namespace ClaudeCarry
             string path = System.IO.Path.Combine(backupDir, stamp + ".zip");
             for (int n = 2; File.Exists(path); n++) path = System.IO.Path.Combine(backupDir, stamp + "-" + n + ".zip");
             var stats = new Stats();
-            using (var fs = new FileStream(path, FileMode.CreateNew))
-            using (var zip = new ZipArchive(fs, ZipArchiveMode.Create))
+            bool created = false;
+            try
             {
-                if (!accountOnly)
+                using (var fs = new FileStream(path, FileMode.CreateNew))
+                using (var zip = new ZipArchive(fs, ZipArchiveMode.Create))
                 {
-                    AddTree(zip, System.IO.Path.Combine(HomeL, "projects"), "claude/projects", r => r.Contains("\\memory\\"), stats);
-                    AddTree(zip, System.IO.Path.Combine(HomeL, "skills"), "claude/skills", null, stats);
-                    foreach (var n in new[] { "CLAUDE.md", "settings.json" })
+                    created = true;
+                    if (!accountOnly)
                     {
-                        string p = System.IO.Path.Combine(HomeL, n);
-                        if (File.Exists(p)) TryAddFile(zip, p, "claude/" + n, n, stats);
+                        AddTree(zip, System.IO.Path.Combine(HomeL, "projects"), "claude/projects", r => r.Contains("\\memory\\"), stats);
+                        AddTree(zip, System.IO.Path.Combine(HomeL, "skills"), "claude/skills", null, stats);
+                        foreach (var n in new[] { "CLAUDE.md", "settings.json" })
+                        {
+                            string p = System.IO.Path.Combine(HomeL, n);
+                            if (File.Exists(p)) TryAddFile(zip, p, "claude/" + n, n, stats);
+                        }
                     }
+                    if (Directory.Exists(targetDir)) AddTree(zip, targetDir, "app/account", null, stats);
                 }
-                if (Directory.Exists(targetDir)) AddTree(zip, targetDir, "app/account", null, stats);
+            }
+            catch (Exception)
+            {
+                // An incomplete backup (disk full, for instance) must not be left looking like a good one.
+                if (created) try { File.Delete(path); } catch (Exception) { }
+                throw;
             }
             // The backup must be complete: a file that couldn't be read means we stop before changing anything.
             if (stats.Failed.Count > 0)
@@ -670,11 +789,17 @@ namespace ClaudeCarry
                    !Regex.IsMatch(name, @"(^|/)\.\.?(/|$)");
         }
 
+        // The only files under claude/ in an export: projects (transcripts and memory), skills, CLAUDE.md, settings.json.
+        static bool ImportAllowed(string rel)
+        {
+            return rel == "CLAUDE.md" || rel == "settings.json" || rel.StartsWith("projects\\") || rel.StartsWith("skills\\");
+        }
+
         // onlySessions == null imports everything in the zip; otherwise only those chats (by local_ id)
         // plus the shared files (memory, CLAUDE.md, skills, settings).
         public ImportResult Import(string zipPath, string accountId, bool dryRun, HashSet<string> onlySessions = null)
         {
-            string targetDir = System.IO.Path.Combine(SessionsDir, accountId);
+            string targetDir = AccountDir(accountId);
             if (!Directory.Exists(targetDir)) throw new DirectoryNotFoundException("No account folder " + Plain(targetDir));
             if (!dryRun && IsLiveApp && ClaudeRunning())
                 throw new InvalidOperationException("The Claude app is running. Quit it completely (also from the tray), then import again.");
@@ -720,6 +845,8 @@ namespace ClaudeCarry
                     if (tm.Success) zipTranscripts.Add(tm.Groups[1].Value);
 
                     string rel = name.Substring(7).Replace('/', '\\');
+                    // An export holds only these. Anything else in a zip (hooks, commands, credentials) is not ours to restore.
+                    if (!ImportAllowed(rel)) { Log("Skipping unexpected file " + name); continue; }
                     string destPlain = System.IO.Path.GetFullPath(System.IO.Path.Combine(Full(Home), rel));
                     if (!destPlain.StartsWith(homePlain, StringComparison.OrdinalIgnoreCase)) { Log("Skipping unsafe path " + name); continue; }
                     string dest = LP(destPlain);
@@ -823,7 +950,19 @@ namespace ClaudeCarry
             if (idx == null) idx = new Dictionary<string, object> { { "v", 1 } };
             var list = idx.ContainsKey("archived") && idx["archived"] is object[] ? ((object[])idx["archived"]).Select(Convert.ToString).ToList() : new List<string>();
             idx["archived"] = list.Concat(ids).Distinct().ToArray();
-            File.WriteAllText(idxPath, js.Serialize(idx), Utf8);
+            // Write a new file and swap it in, so an interruption can't leave the index cut off in the middle.
+            string part = idxPath + ".claudecarry-part";
+            try
+            {
+                File.WriteAllText(part, js.Serialize(idx), Utf8);
+                if (File.Exists(idxPath)) File.Replace(part, idxPath, null);
+                else File.Move(part, idxPath);
+            }
+            catch (Exception)
+            {
+                try { File.Delete(part); } catch (Exception) { }
+                throw;
+            }
         }
 
         // ---------- copy (no zip) ----------
@@ -832,7 +971,7 @@ namespace ClaudeCarry
         // memory are shared by all accounts already, so only the sidebar entries are copied.
         public ImportResult CopyChats(List<ChatInfo> chats, string accountId, bool dryRun)
         {
-            string targetDir = System.IO.Path.Combine(SessionsDir, accountId);
+            string targetDir = AccountDir(accountId);
             if (!Directory.Exists(targetDir)) throw new DirectoryNotFoundException("No account folder " + Plain(targetDir));
             if (!dryRun && IsLiveApp && ClaudeRunning())
                 throw new InvalidOperationException("The Claude app is running. Quit it completely (also from the tray), then try again.");
