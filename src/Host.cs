@@ -26,6 +26,28 @@ namespace ClaudeCarry
         readonly WebView2 web = new WebView2 { Dock = DockStyle.Fill };
         readonly JavaScriptSerializer js = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
         bool busy;
+        // Where ClaudeCarry keeps its own small files (web view cache, the chosen theme). CLAUDECARRY_DATA
+        // (test mode) moves it, so a second copy can run next to this one.
+        readonly string dataDir = Environment.GetEnvironmentVariable("CLAUDECARRY_DATA") ??
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ClaudeCarry");
+
+        // The theme chosen with the page's button ("dark" or "light"), or null to follow Windows. The page itself can't
+        // keep it: a page loaded from a string has no storage.
+        string SavedTheme()
+        {
+            try
+            {
+                string t = File.ReadAllText(Path.Combine(dataDir, "theme.txt")).Trim();
+                return t == "dark" || t == "light" ? t : null;
+            }
+            catch (Exception) { return null; }
+        }
+
+        void SaveTheme(string theme)
+        {
+            try { Directory.CreateDirectory(dataDir); File.WriteAllText(Path.Combine(dataDir, "theme.txt"), theme); }
+            catch (Exception) { }
+        }
 
         public HostForm()
         {
@@ -34,7 +56,8 @@ namespace ClaudeCarry
             Size = new Size(1180, 760);
             MinimumSize = new Size(860, 560);
             try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch (Exception) { }
-            bool dark = SystemUsesDark();
+            string saved = SavedTheme();
+            bool dark = saved != null ? saved == "dark" : SystemUsesDark();
             BackColor = dark ? Color.FromArgb(9, 9, 11) : Color.White;
             web.DefaultBackgroundColor = BackColor;
             Controls.Add(web);
@@ -44,7 +67,7 @@ namespace ClaudeCarry
             if ((v = Environment.GetEnvironmentVariable("CLAUDECARRY_APPDATA")) != null) carry.App = v;
             if ((v = Environment.GetEnvironmentVariable("CLAUDECARRY_BACKUPS")) != null) carry.BackupDir = v;
             carry.Log = line => Post(new Dictionary<string, object> { { "event", "log" }, { "text", line } });
-            HandleCreated += delegate { SetDarkTitleBar(dark); };
+            HandleCreated += delegate { ApplyTheme(dark); };
             Load += async delegate { await Init(); };
         }
 
@@ -58,19 +81,36 @@ namespace ClaudeCarry
             catch (Exception) { return false; }
         }
 
-        void SetDarkTitleBar(bool dark)
+        static int Bgr(int r, int g, int b) { return r | (g << 8) | (b << 16); }
+
+        // Makes the window itself follow the page's theme: the form and web view background, and (Windows 11)
+        // the title bar, its text and the frame border, so no differently colored strip shows around the app.
+        // The colors are the page's --bg, --fg and --border. Older Windows ignores the color attributes.
+        void ApplyTheme(bool dark)
         {
+            BackColor = dark ? Color.FromArgb(9, 9, 11) : Color.White;
+            web.DefaultBackgroundColor = BackColor;   // what shows while the page redraws or the window is resized
+            if (!IsHandleCreated) return;
             int on = dark ? 1 : 0;
-            try { DwmSetWindowAttribute(Handle, 20, ref on, 4); } catch (Exception) { }
+            try
+            {
+                if (DwmSetWindowAttribute(Handle, 20, ref on, 4) != 0) DwmSetWindowAttribute(Handle, 19, ref on, 4);   // 19: Windows 10 before 20H1
+                int caption = dark ? Bgr(9, 9, 11) : Bgr(255, 255, 255);
+                int text = dark ? Bgr(250, 250, 250) : Bgr(9, 9, 11);
+                int border = dark ? Bgr(39, 39, 42) : Bgr(228, 228, 231);
+                DwmSetWindowAttribute(Handle, 35, ref caption, 4);   // DWMWA_CAPTION_COLOR
+                DwmSetWindowAttribute(Handle, 36, ref text, 4);      // DWMWA_TEXT_COLOR
+                DwmSetWindowAttribute(Handle, 34, ref border, 4);    // DWMWA_BORDER_COLOR
+            }
+            catch (Exception) { }
         }
 
         async Task Init()
         {
             try
             {
-                string data = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ClaudeCarry");
                 CoreWebView2Environment.SetLoaderDllFolderPath(Program.NativeDir);
-                var env = await CoreWebView2Environment.CreateAsync(null, Path.Combine(data, "WebView2"));
+                var env = await CoreWebView2Environment.CreateAsync(null, Path.Combine(dataDir, "WebView2"));
                 await web.EnsureCoreWebView2Async(env);
                 var s = web.CoreWebView2.Settings;
                 s.AreDefaultContextMenusEnabled = false;
@@ -86,7 +126,10 @@ namespace ClaudeCarry
                 };
                 // Links never open inside the app.
                 web.CoreWebView2.NewWindowRequested += (o, e) => { e.Handled = true; };
-                web.CoreWebView2.NavigateToString(Program.ReadResource("index.html"));
+                // A theme chosen earlier is written into the page up front, so it never flashes the other one.
+                string html = Program.ReadResource("index.html"), saved = SavedTheme();
+                if (saved != null) html = html.Replace("<html lang=\"en\">", "<html lang=\"en\" data-theme=\"" + saved + "\">");
+                web.CoreWebView2.NavigateToString(html);
             }
             catch (Exception ex)
             {
@@ -150,7 +193,6 @@ namespace ClaudeCarry
                 case "init":
                     return new Dictionary<string, object>
                     {
-                        { "accounts", Accounts() }, { "dark", SystemUsesDark() },
                         { "version", Assembly.GetExecutingAssembly().GetName().Version.ToString(3) },
                         { "backupDir", carry.BackupDir }
                     };
@@ -169,9 +211,13 @@ namespace ClaudeCarry
                 }
 
                 case "theme":
-                    SetDarkTitleBar(Str(a, "theme") == "dark");
-                    BackColor = Str(a, "theme") == "dark" ? Color.FromArgb(9, 9, 11) : Color.White;
+                {
+                    string theme = Str(a, "theme") == "dark" ? "dark" : "light";
+                    ApplyTheme(theme == "dark");
+                    object save;
+                    if (a.TryGetValue("save", out save) && save is bool && (bool)save) SaveTheme(theme);
                     return null;
+                }
 
                 case "export":
                 {

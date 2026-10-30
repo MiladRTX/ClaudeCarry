@@ -1,10 +1,5 @@
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/icon-256-dark.png">
-    <img src="assets/icon-256.png" width="128" height="128" alt="ClaudeCarry logo">
-  </picture>
-</p>
+<p align="center"><img src="assets/logo.png" width="128" height="128" alt="ClaudeCarry logo"></p>
 
 <h1 align="center">ClaudeCarry</h1>
 
@@ -126,7 +121,7 @@ ClaudeCarry/
 ├── src/        C# source: Carry.cs (core), Host.cs (window bridge), Program.cs (entry point, command line)
 ├── ui/         index.html, the whole interface (HTML, CSS, JavaScript in one file)
 ├── lib/        Microsoft WebView2 SDK files (see lib/WebView2-LICENSE.txt)
-├── assets/     app icon (ClaudeCarry.ico) and README logo (icon-256.png)
+├── assets/     app icon (ClaudeCarry.ico) and the logo (logo.png)
 └── build.bat   builds ClaudeCarry.exe
 ```
 
